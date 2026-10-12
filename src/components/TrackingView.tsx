@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { TrackingData } from "@/lib/deliveryTracker/types";
 import { formatKstClock, formatKstDateTime, shortDateTime, statusLabel, stripHonorific } from "@/lib/format";
 import type { TrackingResult } from "@/lib/tracking";
@@ -50,12 +51,39 @@ function CourierRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
+/** 수령인 이름 밑에 쿠팡 주문 상세처럼 왼쪽 회색 라벨 / 오른쪽 값으로 나오는 행 (상품명·받는주소·배송요청사항) */
+function InfoRows({ rows, spaced }: { rows: Array<[label: string, value: string]>; spaced: boolean }) {
+  return (
+    // 라벨 칸 폭을 고정하고 값 칸은 minmax(0,1fr) 로 줄여, 긴 상품명·주소가 줄바꿈되어 360px 에서도 가로 스크롤이 없다
+    <dl className={`grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5${spaced ? " mt-2.5" : ""}`}>
+      {rows.map(([label, value]) => (
+        <Fragment key={label}>
+          <dt className="text-muted">{label}</dt>
+          <dd className="min-w-0">{value}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
 function OkView({ result, data }: { result: TrackingResult; data: TrackingData }) {
   const { latest, recipient, courier } = data;
+  const { meta } = result;
   const invoiceNo = courier?.invoiceNo || data.invoiceNo;
-  // 예전에 저장된 스냅샷에는 " sir" 같은 호칭이 남아 있을 수 있어 렌더 시점에도 한 번 더 뗀다
-  const recipientName = stripHonorific(recipient?.name ?? "");
-  const hasRecipient = Boolean(recipientName || recipient?.address);
+  // 예전에 저장된 스냅샷에는 " sir" 같은 호칭이 남아 있을 수 있어 렌더 시점에도 한 번 더 뗀다.
+  // Delivery Tracker 의 수령인 이름이 우선이고, 없으면 수집 API 로 등록된 이름을 쓴다
+  const recipientName = stripHonorific(recipient?.name ?? "") || stripHonorific(meta?.receiverName ?? "");
+  // 등록된 정보 중 값이 있는 줄만 (순서 고정: 상품명 -> 받는주소 -> 배송요청사항)
+  const infoRows = (
+    [
+      ["상품명", meta?.productName],
+      ["받는주소", meta?.receiverAddress],
+      ["배송요청사항", meta?.deliveryMessage],
+    ] as Array<[string, string | undefined]>
+  ).filter((row): row is [string, string] => Boolean(row[1]?.trim()));
+  // API 가 주는 지역은 등록된 받는주소가 없을 때만 보여준다
+  const region = meta?.receiverAddress?.trim() ? "" : (recipient?.address ?? "");
+  const hasRecipient = Boolean(recipientName || region || infoRows.length > 0);
   const checkedAt = result.stale
     ? formatKstDateTime(result.fetchedAt ? new Date(result.fetchedAt) : undefined)
     : formatKstClock(result.fetchedAt);
@@ -86,10 +114,11 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
 
       <section className={card}>
         {hasRecipient && (
-          // 모달과 같은 구성: 첫 줄 이름(굵게), 둘째 줄 지역. 지역이 비면 둘째 줄을 숨긴다
+          // 첫 줄 이름(굵게), 그 밑에 지역(등록된 받는주소가 없을 때) 또는 상품명/받는주소/배송요청사항 행. 값이 없는 줄은 숨긴다
           <div className="mb-3 border-b border-line pb-3 text-sm">
             {recipientName && <p className="font-bold">{recipientName} 님</p>}
-            {recipient?.address && <p className="mt-0.5 text-muted">{recipient.address}</p>}
+            {region && <p className="mt-0.5 text-muted">{region}</p>}
+            {infoRows.length > 0 && <InfoRows rows={infoRows} spaced={Boolean(recipientName || region)} />}
           </div>
         )}
         <table className="w-full text-sm">

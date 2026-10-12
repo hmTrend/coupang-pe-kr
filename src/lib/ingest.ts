@@ -1,5 +1,6 @@
 // 수집(ingest) API 요청 본문 검증/정규화 (순수 함수)
 import { normalizeInvoiceNo } from "@/lib/invoiceNo";
+import { maskAddress, maskDeliveryMessage, maskReceiverName } from "@/lib/mask";
 import type { InvoiceMeta, RegistrationInput } from "@/lib/store/types";
 
 export const MAX_INGEST_ITEMS = 500;
@@ -9,12 +10,24 @@ export const FIELD_LIMITS = {
   orderId: 64,
   productName: 200,
   receiverName: 50,
+  receiverAddress: 200,
+  deliveryMessage: 200,
   orderedAt: 40,
   memo: 500,
 } as const;
 
-type MetaField = keyof typeof FIELD_LIMITS;
+export type MetaField = keyof typeof FIELD_LIMITS;
 const META_FIELDS = Object.keys(FIELD_LIMITS) as MetaField[];
+
+/**
+ * 고객 화면에 나가는 필드는 NSV 가 1차 마스킹한 값이 와도 저장 전에 한 번 더 마스킹한다(안전망, 멱등).
+ * 규칙은 src/lib/mask.ts 참고.
+ */
+export const MASKERS: Partial<Record<MetaField, (value: string) => string>> = {
+  receiverName: maskReceiverName,
+  receiverAddress: maskAddress,
+  deliveryMessage: maskDeliveryMessage,
+};
 
 export interface InvalidItem {
   index: number;
@@ -33,13 +46,16 @@ export type IngestParseResult =
     }
   | { ok: false; status: 400 | 413; error: string };
 
-/** 제어문자 제거 + 공백 정리 + 길이 제한. 값이 비면 undefined */
-function cleanString(value: string, max: number): string | undefined {
-  const cleaned = value
+/**
+ * 제어문자 제거 + 공백 정리 + (필요하면 마스킹) + 길이 제한. 값이 비면 undefined.
+ * 마스킹은 길이 제한보다 먼저 한다 (잘린 뒤 남은 조각에 숫자 일부가 새지 않게).
+ */
+export function cleanString(value: string, max: number, mask?: (value: string) => string): string | undefined {
+  const spaced = value
     .replace(/\p{Cc}/gu, " ")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max);
+    .trim();
+  const cleaned = (mask ? mask(spaced) : spaced).slice(0, max).trim();
   return cleaned === "" ? undefined : cleaned;
 }
 
@@ -100,7 +116,7 @@ export function validateIngestBody(body: unknown): IngestParseResult {
         invalid.push({ index, invoiceNo: label, reason: `invalid_type:${field}` });
         return;
       }
-      const cleaned = cleanString(asString, FIELD_LIMITS[field]);
+      const cleaned = cleanString(asString, FIELD_LIMITS[field], MASKERS[field]);
       if (cleaned !== undefined) meta[field] = cleaned;
     }
 

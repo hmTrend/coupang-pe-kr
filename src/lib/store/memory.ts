@@ -22,6 +22,15 @@ function definedMeta(meta: InvoiceMeta): InvoiceMeta {
   return out;
 }
 
+/** 값이 있는(undefined 도 빈 문자열도 아닌) 필드만 남긴다. pull 로 받은 빈 값이 기존 값을 지우지 않게 한다 */
+function nonBlankMeta(meta: InvoiceMeta): InvoiceMeta {
+  const out: InvoiceMeta = {};
+  for (const [key, value] of Object.entries(meta)) {
+    if (typeof value === "string" && value.trim() !== "") (out as Record<string, string>)[key] = value;
+  }
+  return out;
+}
+
 function newDoc(invoiceNo: string, now: Date): InvoiceDoc {
   return {
     _id: invoiceNo,
@@ -96,6 +105,23 @@ export class MemoryInvoiceStore implements InvoiceStore {
     const doc = this.docs.get(invoiceNo) ?? newDoc(invoiceNo, now);
     doc.lastAttemptAt = now;
     doc.lastError = error.slice(0, 300);
+    doc.updatedAt = now;
+    this.docs.set(invoiceNo, doc);
+  }
+
+  async saveFetchedMeta(invoiceNo: string, meta: InvoiceMeta, now: Date): Promise<void> {
+    const doc = this.docs.get(invoiceNo) ?? newDoc(invoiceNo, now);
+    doc.meta = { ...doc.meta, ...nonBlankMeta(meta) };
+    doc.metaFetchedAt = now;
+    doc.metaSource = "nsv";
+    delete doc.metaNotFoundAt;
+    doc.updatedAt = now;
+    this.docs.set(invoiceNo, doc);
+  }
+
+  async saveMetaNotFound(invoiceNo: string, now: Date): Promise<void> {
+    const doc = this.docs.get(invoiceNo) ?? newDoc(invoiceNo, now);
+    doc.metaNotFoundAt = now;
     doc.updatedAt = now;
     this.docs.set(invoiceNo, doc);
   }

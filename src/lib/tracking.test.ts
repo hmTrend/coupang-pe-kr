@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadTrackingData } from "@/lib/deliveryTracker/__fixtures__/load";
 import type { TrackingData, UpstreamResult } from "@/lib/deliveryTracker/types";
+import type { NsvMetaResult } from "@/lib/nsv/client";
 import { MemoryInvoiceStore } from "@/lib/store/memory";
 import type { InvoiceStore } from "@/lib/store/types";
 import type { TrackingConfig } from "@/lib/config";
@@ -298,12 +299,144 @@ describe("미등록 번호 정책", () => {
   });
 });
 
+describe("화면용 meta", () => {
+  const ADDRESS = "충청북도 청주시 상당구 용암동 **** 지음프라자 *** 호";
+  const MESSAGE = "직접 받고 부재 시 문 앞 (*********)";
+  const fullMeta = {
+    orderId: "ORD-SECRET-1",
+    productName: "[노출] 빨간 양말 (L)",
+    receiverName: "김*준",
+    receiverAddress: ADDRESS,
+    deliveryMessage: MESSAGE,
+    orderedAt: "2026-10-08T09:00:00+09:00",
+    memo: "내부메모-유출금지",
+  };
+  const screenMeta = {
+    productName: "[노출] 빨간 양말 (L)",
+    receiverAddress: ADDRESS,
+    deliveryMessage: MESSAGE,
+    receiverName: "김*준",
+  };
+
+  const register = (meta: typeof fullMeta | Partial<typeof fullMeta> = fullMeta) =>
+    store.upsertRegistrations([{ invoiceNo: NO, meta }], "nsv-operator", new Date(clock));
+
+  it("업스트림 조회 결과에 화면용 meta 4개 필드만 담는다 (orderId/memo/orderedAt/operator 제외)", async () => {
+    await register();
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    const result = await tracker()(NO);
+
+    expect(result.status).toBe("ok");
+    expect(result.meta).toEqual(screenMeta);
+    expect(Object.keys(result.meta ?? {}).sort()).toEqual(
+      ["deliveryMessage", "productName", "receiverAddress", "receiverName"],
+    );
+    const json = JSON.stringify(result);
+    for (const leaked of ["ORD-SECRET-1", "내부메모-유출금지", "2026-10-08T09:00:00+09:00", "nsv-operator", "orderId", "memo"]) {
+      expect(json, leaked).not.toContain(leaked);
+    }
+  });
+
+  it("캐시 히트에서도 저장소의 최신 meta 가 들어간다 (캐시 후 meta 가 갱신돼도 반영)", async () => {
+    await register({ productName: "옛 상품명" });
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    const get = tracker();
+    const first = await get(NO);
+    expect(first.meta).toEqual({ productName: "옛 상품명" });
+
+    // 스냅샷은 그대로 두고 NSV 가 meta 를 다시 보낸다
+    await register({ productName: "새 상품명", receiverAddress: ADDRESS });
+    clock += 30 * SEC; // TTL(120초) 이내 -> 캐시
+    const cached = await get(NO);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(cached.fetchedAt).toBe(first.fetchedAt);
+    expect(cached.meta).toEqual({ productName: "새 상품명", receiverAddress: ADDRESS });
+  });
+
+  it("stale 경로(업스트림 실패 + 이전 스냅샷)에서도 meta 가 들어간다", async () => {
+    await register();
+    upstream.mockResolvedValueOnce(ok(IN_TRANSIT));
+    const get = tracker();
+    await get(NO);
+
+    clock += 5 * MIN;
+    upstream.mockResolvedValueOnce({ kind: "error", reason: "timeout" });
+    const stale = await get(NO);
+    expect(stale).toMatchObject({ status: "ok", stale: true });
+    expect(stale.meta).toEqual(screenMeta);
+  });
+
+  it("배송완료 캐시(재조회 없음)와 not_found 응답에도 meta 가 들어간다", async () => {
+    await register();
+    upstream.mockResolvedValue(ok(DELIVERED));
+    const get = tracker();
+    await get(NO);
+    clock += 24 * 60 * MIN;
+    expect((await get(NO)).meta).toEqual(screenMeta);
+
+    const other = "10332152871107";
+    await store.upsertRegistrations([{ invoiceNo: other, meta: { productName: "다른 상품" } }], "nsv", new Date(clock));
+    upstream.mockResolvedValue(notFound);
+    const nf = await get(other);
+    expect(nf).toMatchObject({ status: "not_found" });
+    expect(nf.meta).toEqual({ productName: "다른 상품" });
+  });
+
+  it("조회 불가(unavailable)여도 등록된 번호면 meta 가 들어간다", async () => {
+    await register();
+    upstream.mockResolvedValue({ kind: "error", reason: "auth" });
+    const result = await tracker()(NO);
+    expect(result).toMatchObject({ status: "unavailable" });
+    expect(result.meta).toEqual(screenMeta);
+  });
+
+  it("meta 가 없거나 화면용 필드가 없으면 meta 키 자체를 만들지 않는다 (미등록 번호는 기존 결과 그대로)", async () => {
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    const unregistered = await tracker()(NO);
+    expect("meta" in unregistered).toBe(false);
+
+    // 등록은 됐지만 운영용 필드만 있는 경우
+    const other = "10332152871107";
+    await store.upsertRegistrations([{ invoiceNo: other, meta: { orderId: "O-1", memo: "메모" } }], "nsv", new Date(clock));
+    const onlyInternal = await tracker()(other);
+    expect(onlyInternal.status).toBe("ok");
+    expect("meta" in onlyInternal).toBe(false);
+  });
+
+  it("미등록 조회 차단·invalid 응답에는 meta 가 없다", async () => {
+    const blocked = await tracker({ allowUnregisteredLookup: false })(NO);
+    expect("meta" in blocked).toBe(false);
+    const invalid = await tracker()("abc");
+    expect("meta" in invalid).toBe(false);
+  });
+
+  it("저장소가 meta 를 못 읽어도 조회 자체는 된다 (store.get 실패)", async () => {
+    const broken: InvoiceStore = {
+      get: vi.fn().mockRejectedValue(new Error("db down")),
+      saveSnapshot: vi.fn().mockResolvedValue(undefined),
+      saveAttemptError: vi.fn().mockResolvedValue(undefined),
+      saveFetchedMeta: vi.fn().mockResolvedValue(undefined),
+      saveMetaNotFound: vi.fn().mockResolvedValue(undefined),
+      upsertRegistrations: vi.fn(),
+      listRegistered: vi.fn(),
+    };
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    const result = await tracker({}, broken)(NO);
+    expect(result.status).toBe("ok");
+    expect("meta" in result).toBe(false);
+    spy.mockRestore();
+  });
+});
+
 describe("저장소 장애", () => {
   it("store 가 실패해도 업스트림 결과로 응답한다", async () => {
     const broken: InvoiceStore = {
       get: vi.fn().mockRejectedValue(new Error("db down")),
       saveSnapshot: vi.fn().mockRejectedValue(new Error("db down")),
       saveAttemptError: vi.fn().mockRejectedValue(new Error("db down")),
+      saveFetchedMeta: vi.fn().mockRejectedValue(new Error("db down")),
+      saveMetaNotFound: vi.fn().mockRejectedValue(new Error("db down")),
       upsertRegistrations: vi.fn(),
       listRegistered: vi.fn(),
     };
@@ -313,5 +446,352 @@ describe("저장소 장애", () => {
     const result = await tracker({}, broken)(NO);
     expect(result).toMatchObject({ status: "ok", stale: false });
     spy.mockRestore();
+  });
+});
+
+describe("NSV 조회(pull)로 화면용 meta 채우기", () => {
+  const TTL = 600_000;
+  const NEG_TTL = 120_000;
+  const PULLED = {
+    productName: "NSV 상품명",
+    receiverName: "홍*동",
+    receiverAddress: "서울 강남구 도산대로45길 *** ***동 ****호",
+    deliveryMessage: "문 앞 (*********)",
+  };
+  const found = (meta: Partial<typeof PULLED> = PULLED): NsvMetaResult => ({ kind: "found", meta });
+
+  let nsvFetch: ReturnType<typeof vi.fn<(no: string) => Promise<NsvMetaResult>>>;
+
+  beforeEach(() => {
+    nsvFetch = vi.fn<(no: string) => Promise<NsvMetaResult>>();
+  });
+
+  function pullTracker(storeOverride?: InvoiceStore) {
+    return createTracker({
+      store: storeOverride ?? store,
+      fetchUpstream: upstream,
+      now: () => clock,
+      config: baseConfig,
+      nsv: { fetchMeta: nsvFetch, ttlMs: TTL, negativeTtlMs: NEG_TTL },
+    });
+  }
+
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+  it("meta 가 없으면 NSV 를 조회하고 병합 저장한다 (metaFetchedAt, metaSource:nsv, registered:false 유지)", async () => {
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    nsvFetch.mockResolvedValue(found());
+
+    const result = await pullTracker()(NO);
+
+    expect(nsvFetch).toHaveBeenCalledTimes(1);
+    expect(nsvFetch).toHaveBeenCalledWith(NO);
+    expect(result).toMatchObject({ status: "ok", stale: false });
+    expect(result.meta).toEqual(PULLED);
+
+    const doc = await store.get(NO);
+    expect(doc).toMatchObject({ registered: false, meta: PULLED, metaSource: "nsv", snapshotKind: "ok" });
+    expect(doc?.metaFetchedAt?.getTime()).toBe(clock);
+    expect(doc?.metaNotFoundAt).toBeUndefined();
+  });
+
+  it("공개 결과에는 meta 4개 필드만 나가고 metaFetchedAt / metaSource / metaNotFoundAt 은 나가지 않는다", async () => {
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    nsvFetch.mockResolvedValue(found());
+    const result = await pullTracker()(NO);
+    expect(Object.keys(result.meta ?? {}).sort()).toEqual(["deliveryMessage", "productName", "receiverAddress", "receiverName"]);
+    expect(JSON.stringify(result)).not.toMatch(/metaFetchedAt|metaSource|metaNotFoundAt|"nsv"/);
+  });
+
+  it("TTL 이내면 NSV 를 다시 부르지 않고 저장된 meta 를 쓴다, TTL 이 지나면 다시 조회한다", async () => {
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    nsvFetch.mockResolvedValue(found());
+    const get = pullTracker();
+    await get(NO);
+    expect(nsvFetch).toHaveBeenCalledTimes(1);
+
+    clock += TTL - SEC; // 599초
+    const within = await get(NO);
+    expect(nsvFetch).toHaveBeenCalledTimes(1);
+    expect(within.meta).toEqual(PULLED);
+
+    nsvFetch.mockResolvedValue(found({ ...PULLED, productName: "갱신된 상품명" }));
+    clock += 2 * SEC; // 601초
+    const after = await get(NO);
+    expect(nsvFetch).toHaveBeenCalledTimes(2);
+    expect(after.meta).toEqual({ ...PULLED, productName: "갱신된 상품명" });
+    expect((await store.get(NO))?.metaFetchedAt?.getTime()).toBe(clock);
+  });
+
+  it("push(수집 API)로 들어온 meta 도 pull 로 갱신된다 (같은 필드는 NSV 값, 안 온 필드와 운영용 필드는 유지)", async () => {
+    await store.upsertRegistrations(
+      [
+        {
+          invoiceNo: NO,
+          meta: { orderId: "ORD-1", memo: "내부메모", productName: "push 상품명", receiverAddress: "push 주소 ***" },
+        },
+      ],
+      "nsv-operator",
+      new Date(clock),
+    );
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    nsvFetch.mockResolvedValue(found({ productName: "pull 상품명", deliveryMessage: "문 앞 (*********)" }));
+
+    const result = await pullTracker()(NO);
+    expect(nsvFetch).toHaveBeenCalledTimes(1);
+    expect(result.meta).toEqual({
+      productName: "pull 상품명",
+      receiverAddress: "push 주소 ***",
+      deliveryMessage: "문 앞 (*********)",
+    });
+
+    const doc = await store.get(NO);
+    expect(doc).toMatchObject({
+      registered: true,
+      operator: "nsv-operator",
+      metaSource: "nsv",
+      meta: { orderId: "ORD-1", memo: "내부메모", productName: "pull 상품명", receiverAddress: "push 주소 ***" },
+    });
+  });
+
+  it("빈 값으로 기존 값을 덮지 않는다", async () => {
+    await store.upsertRegistrations(
+      [{ invoiceNo: NO, meta: { productName: "기존 상품명", receiverAddress: "기존 주소 ***" } }],
+      "nsv",
+      new Date(clock),
+    );
+    upstream.mockResolvedValue(ok(IN_TRANSIT));
+    nsvFetch.mockResolvedValue({
+      kind: "found",
+      meta: { productName: "", receiverAddress: "  ", receiverName: "홍*동" },
+    });
+
+    const result = await pullTracker()(NO);
+    expect(result.meta).toEqual({ productName: "기존 상품명", receiverAddress: "기존 주소 ***", receiverName: "홍*동" });
+    expect((await store.get(NO))?.meta).toEqual({
+      productName: "기존 상품명",
+      receiverAddress: "기존 주소 ***",
+      receiverName: "홍*동",
+    });
+  });
+
+  describe("not_found 음성 캐시", () => {
+    it("NSV 가 없음으로 답하면 시각을 기록하고, NEGATIVE_TTL 동안은 다시 부르지 않는다", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "not_found" });
+      const get = pullTracker();
+
+      const first = await get(NO);
+      expect(first.status).toBe("ok");
+      expect("meta" in first).toBe(false);
+      const doc = await store.get(NO);
+      expect(doc?.metaNotFoundAt?.getTime()).toBe(clock);
+      expect(doc?.metaFetchedAt).toBeUndefined();
+      expect(doc?.meta).toBeUndefined();
+
+      clock += NEG_TTL - SEC; // 119초
+      await get(NO);
+      expect(nsvFetch).toHaveBeenCalledTimes(1);
+
+      clock += 2 * SEC; // 121초
+      await get(NO);
+      expect(nsvFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("기존 meta 가 있어도 not_found 로 지우지 않는다", async () => {
+      await store.upsertRegistrations([{ invoiceNo: NO, meta: { productName: "push 상품명" } }], "nsv", new Date(clock));
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "not_found" });
+
+      const result = await pullTracker()(NO);
+      expect(result.meta).toEqual({ productName: "push 상품명" });
+      expect((await store.get(NO))?.meta).toEqual({ productName: "push 상품명" });
+    });
+
+    it("음성 캐시 기간이 지난 뒤 found 가 되면 meta 를 저장하고 음성 캐시는 지워진다", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValueOnce({ kind: "not_found" });
+      const get = pullTracker();
+      await get(NO);
+
+      clock += NEG_TTL + SEC;
+      nsvFetch.mockResolvedValueOnce(found());
+      const result = await get(NO);
+      expect(result.meta).toEqual(PULLED);
+      const doc = await store.get(NO);
+      expect(doc?.metaNotFoundAt).toBeUndefined();
+      expect(doc?.metaFetchedAt?.getTime()).toBe(clock);
+    });
+
+    it("found 인데 표시할 값이 하나도 없으면 음성 캐시로 둔다 (매 조회마다 다시 묻지 않음)", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "found", meta: {} });
+      const get = pullTracker();
+      const first = await get(NO);
+      expect("meta" in first).toBe(false);
+      await get(NO);
+      expect(nsvFetch).toHaveBeenCalledTimes(1);
+      const doc = await store.get(NO);
+      expect(doc?.metaNotFoundAt?.getTime()).toBe(clock);
+      expect(doc?.metaFetchedAt).toBeUndefined();
+    });
+  });
+
+  describe("NSV 조회 실패", () => {
+    it("error 면 기존 meta 를 그대로 쓰고 아무것도 기록하지 않으며, 다음 조회에서 바로 다시 시도한다", async () => {
+      await store.upsertRegistrations([{ invoiceNo: NO, meta: { productName: "push 상품명" } }], "nsv", new Date(clock));
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "error", reason: "timeout" });
+      const get = pullTracker();
+
+      const result = await get(NO);
+      expect(result).toMatchObject({ status: "ok", stale: false });
+      expect(result.meta).toEqual({ productName: "push 상품명" });
+      const doc = await store.get(NO);
+      expect(doc?.meta).toEqual({ productName: "push 상품명" });
+      expect(doc?.metaFetchedAt).toBeUndefined();
+      expect(doc?.metaNotFoundAt).toBeUndefined();
+
+      await get(NO);
+      expect(nsvFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("error 면 meta 가 없어도 배송 조회 결과는 정상이고 meta 키가 없다", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "error", reason: "schema_mismatch" });
+      const result = await pullTracker()(NO);
+      expect(result).toMatchObject({ status: "ok", stale: false, invoiceNo: NO });
+      expect(result.data?.currentStep).toBe("이동");
+      expect("meta" in result).toBe(false);
+      expect(await store.get(NO)).toMatchObject({ snapshotKind: "ok" });
+    });
+
+    it("fetchMeta 가 예외를 던져도 배송 조회 결과는 정상이다", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockRejectedValue(new Error("boom"));
+      const result = await pullTracker()(NO);
+      expect(result).toMatchObject({ status: "ok", stale: false });
+      expect("meta" in result).toBe(false);
+      spy.mockRestore();
+    });
+
+    it("disabled(NSV_GRAPHQL_URLS 없음)면 아무것도 저장하지 않고 저장소 meta 만 쓴다", async () => {
+      await store.upsertRegistrations([{ invoiceNo: NO, meta: { productName: "push 상품명" } }], "nsv", new Date(clock));
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue({ kind: "disabled" });
+      const result = await pullTracker()(NO);
+      expect(result.meta).toEqual({ productName: "push 상품명" });
+      const doc = await store.get(NO);
+      expect(doc?.metaFetchedAt).toBeUndefined();
+      expect(doc?.metaNotFoundAt).toBeUndefined();
+    });
+
+    it("nsv 설정이 없으면(deps.nsv 미지정) NSV 를 전혀 부르지 않는다", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      const result = await tracker()(NO);
+      expect(result.status).toBe("ok");
+      expect(nsvFetch).not.toHaveBeenCalled();
+    });
+
+    it("meta 저장이 실패해도 응답에는 방금 받은 NSV 값이 들어간다", async () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const flaky = new MemoryInvoiceStore();
+      flaky.saveFetchedMeta = vi.fn().mockRejectedValue(new Error("db down"));
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue(found());
+      const result = await pullTracker(flaky)(NO);
+      expect(result).toMatchObject({ status: "ok" });
+      expect(result.meta).toEqual(PULLED);
+      spy.mockRestore();
+    });
+  });
+
+  describe("Delivery Tracker 와의 관계", () => {
+    it("Delivery Tracker 와 NSV 를 병렬로 호출한다 (한쪽이 끝나기 전에 둘 다 호출됨)", async () => {
+      let releaseUpstream!: (value: UpstreamResult) => void;
+      let releaseNsv!: (value: NsvMetaResult) => void;
+      upstream.mockImplementation(() => new Promise<UpstreamResult>((resolve) => (releaseUpstream = resolve)));
+      nsvFetch.mockImplementation(() => new Promise<NsvMetaResult>((resolve) => (releaseNsv = resolve)));
+
+      const pending = pullTracker()(NO);
+      await flush();
+      expect(upstream).toHaveBeenCalledTimes(1);
+      expect(nsvFetch).toHaveBeenCalledTimes(1);
+
+      releaseUpstream(ok(IN_TRANSIT));
+      await flush();
+      let settled = false;
+      void pending.then(() => (settled = true));
+      await flush();
+      expect(settled).toBe(false); // NSV 응답을 기다린다
+
+      releaseNsv(found());
+      const result = await pending;
+      expect(result).toMatchObject({ status: "ok" });
+      expect(result.meta).toEqual(PULLED);
+    });
+
+    it("NSV 가 느려도 배송 조회는 이미 시작돼 있다 (NSV 를 먼저 끝까지 기다리지 않는다)", async () => {
+      nsvFetch.mockImplementation(() => new Promise<NsvMetaResult>(() => undefined)); // 끝나지 않음
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      void pullTracker()(NO);
+      await flush();
+      expect(upstream).toHaveBeenCalledTimes(1);
+    });
+
+    it("배송 스냅샷 캐시 히트여도 meta 가 필요하면 NSV 만 조회한다", async () => {
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValueOnce({ kind: "error", reason: "network" });
+      const get = pullTracker();
+      const first = await get(NO);
+      expect("meta" in first).toBe(false);
+
+      clock += 30 * SEC; // 스냅샷 TTL(120초) 이내 -> 업스트림은 캐시
+      nsvFetch.mockResolvedValueOnce(found());
+      const second = await get(NO);
+      expect(upstream).toHaveBeenCalledTimes(1);
+      expect(nsvFetch).toHaveBeenCalledTimes(2);
+      expect(second.fetchedAt).toBe(first.fetchedAt);
+      expect(second.meta).toEqual(PULLED);
+    });
+
+    it("업스트림이 not_found / 조회 실패여도 NSV meta 는 붙는다", async () => {
+      nsvFetch.mockResolvedValue(found());
+
+      upstream.mockResolvedValueOnce(notFound);
+      const nf = await pullTracker()(NO);
+      expect(nf).toMatchObject({ status: "not_found" });
+      expect(nf.meta).toEqual(PULLED);
+
+      upstream.mockResolvedValueOnce({ kind: "error", reason: "timeout" });
+      const un = await pullTracker()("10332152871107");
+      expect(un).toMatchObject({ status: "unavailable" });
+      expect(un.meta).toEqual(PULLED);
+    });
+
+    it("미등록(registered:false) 번호도 NSV 를 조회한다", async () => {
+      expect(await store.get(NO)).toBeNull();
+      upstream.mockResolvedValue(ok(IN_TRANSIT));
+      nsvFetch.mockResolvedValue(found());
+      const result = await pullTracker()(NO);
+      expect(nsvFetch).toHaveBeenCalledWith(NO);
+      expect(result.meta).toEqual(PULLED);
+      expect((await store.get(NO))?.registered).toBe(false);
+    });
+
+    it("ALLOW_UNREGISTERED_LOOKUP=false 로 차단된 번호와 잘못된 번호는 NSV 도 부르지 않는다", async () => {
+      const blocked = createTracker({
+        store,
+        fetchUpstream: upstream,
+        now: () => clock,
+        config: { ...baseConfig, allowUnregisteredLookup: false },
+        nsv: { fetchMeta: nsvFetch, ttlMs: TTL, negativeTtlMs: NEG_TTL },
+      });
+      expect(await blocked(NO)).toMatchObject({ status: "not_found", reason: "unregistered_lookup_disabled" });
+      expect(await pullTracker()("abc")).toMatchObject({ status: "invalid" });
+      expect(nsvFetch).not.toHaveBeenCalled();
+      expect(upstream).not.toHaveBeenCalled();
+    });
   });
 });

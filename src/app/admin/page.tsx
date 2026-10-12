@@ -82,13 +82,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-line bg-card">
-          <table className="w-full min-w-[56rem] text-left text-sm">
+          <table className="w-full min-w-[68rem] text-left text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
                 <th className="px-4 py-3 font-medium">운송장번호</th>
                 <th className="px-3 py-3 font-medium">operator</th>
                 <th className="px-3 py-3 font-medium">상품명</th>
                 <th className="px-3 py-3 font-medium">수령인</th>
+                <th className="px-3 py-3 font-medium">받는주소 / 배송요청사항</th>
                 <th className="px-3 py-3 font-medium">등록시각</th>
                 <th className="px-3 py-3 font-medium">마지막 상태</th>
                 <th className="px-3 py-3 font-medium">확인시각</th>
@@ -98,7 +99,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
             <tbody className="divide-y divide-line">
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-muted">
+                  <td colSpan={9} className="px-4 py-10 text-center text-muted">
                     {q ? "검색 결과가 없습니다." : "등록된 운송장이 없습니다."}
                   </td>
                 </tr>
@@ -123,6 +124,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                     <td className="px-3 py-3">{doc.operator ?? "-"}</td>
                     <td className="max-w-64 px-3 py-3">{doc.meta?.productName ?? "-"}</td>
                     <td className="px-3 py-3">{doc.meta?.receiverName ?? "-"}</td>
+                    <td className="max-w-72 px-3 py-3">
+                      {/* 저장된 값은 수집 단계에서 이미 마스킹된 것만 있다 */}
+                      <p>{doc.meta?.receiverAddress ?? "-"}</p>
+                      {doc.meta?.deliveryMessage && (
+                        <p className="mt-0.5 text-xs text-muted">{doc.meta.deliveryMessage}</p>
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-3 py-3 tabular-nums">
                       {formatKstDateTime(doc.registeredAt) || "-"}
                     </td>

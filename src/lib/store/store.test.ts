@@ -93,6 +93,49 @@ for (const harness of harnesses) {
       expect(doc?.updatedAt.getTime()).toBe(T1.getTime());
     });
 
+    it("주소/배송메시지가 meta 에 저장되고, 일부만 다시 보내도 기존 필드(안 보낸 것)는 지워지지 않는다", async () => {
+      await store.upsertRegistrations(
+        [
+          {
+            invoiceNo: "1111111111111",
+            meta: {
+              orderId: "O-1",
+              productName: "빨간 양말 (L)",
+              receiverName: "김*준",
+              receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 *** 호",
+              deliveryMessage: "문 앞 (*********)",
+              memo: "선물포장",
+            },
+          },
+        ],
+        "nsv",
+        T0,
+      );
+
+      // 배송메시지만 다시 보낸다 (주소·상품명 등은 보내지 않음)
+      await store.upsertRegistrations(
+        [{ invoiceNo: "1111111111111", meta: { deliveryMessage: "경비실 (*********)" } }],
+        "nsv",
+        T1,
+      );
+      expect((await store.get("1111111111111"))?.meta).toEqual({
+        orderId: "O-1",
+        productName: "빨간 양말 (L)",
+        receiverName: "김*준",
+        receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 *** 호",
+        deliveryMessage: "경비실 (*********)",
+        memo: "선물포장",
+      });
+
+      // 빈 meta 로 다시 보내도 아무것도 지워지지 않는다
+      await store.upsertRegistrations([{ invoiceNo: "1111111111111", meta: {} }], "nsv", T2);
+      expect((await store.get("1111111111111"))?.meta).toMatchObject({
+        productName: "빨간 양말 (L)",
+        receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 *** 호",
+        deliveryMessage: "경비실 (*********)",
+      });
+    });
+
     it("조회만 되어 있던 번호를 등록하면 신규 등록으로 세고 스냅샷은 유지한다", async () => {
       await store.saveSnapshot("1111111111111", { kind: "ok", data: delivered }, T0);
       expect((await store.get("1111111111111"))?.registered).toBe(false);
@@ -156,6 +199,83 @@ for (const harness of harnesses) {
         snapshotKind: null,
         lastError: "error:timeout",
       });
+    });
+
+    it("saveFetchedMeta: 문서가 없으면 registered:false 로 만들고 meta / metaFetchedAt / metaSource 를 기록한다", async () => {
+      await store.saveFetchedMeta("8888888888888", { productName: "양말", receiverAddress: "서울 *** ***동" }, T0);
+      const doc = await store.get("8888888888888");
+      expect(doc).toMatchObject({
+        registered: false,
+        meta: { productName: "양말", receiverAddress: "서울 *** ***동" },
+        metaSource: "nsv",
+        snapshot: null,
+        snapshotKind: null,
+        delivered: false,
+      });
+      expect(doc?.metaFetchedAt?.getTime()).toBe(T0.getTime());
+      expect(doc?.metaNotFoundAt).toBeUndefined();
+    });
+
+    it("saveFetchedMeta: 값이 있는 필드만 병합하고(빈 값·undefined 는 기존 값 유지) 등록 정보·스냅샷·운영용 필드는 건드리지 않는다", async () => {
+      await store.upsertRegistrations(
+        [{ invoiceNo: "1111111111111", meta: { orderId: "O-1", memo: "메모", productName: "옛 상품명", receiverAddress: "옛 주소" } }],
+        "nsv-a",
+        T0,
+      );
+      await store.saveSnapshot("1111111111111", { kind: "ok", data: delivered }, T0);
+
+      await store.saveFetchedMeta(
+        "1111111111111",
+        { productName: "새 상품명", receiverAddress: "", deliveryMessage: "  ", receiverName: undefined },
+        T1,
+      );
+      const doc = await store.get("1111111111111");
+      expect(doc?.meta).toEqual({ orderId: "O-1", memo: "메모", productName: "새 상품명", receiverAddress: "옛 주소" });
+      expect(doc).toMatchObject({ registered: true, operator: "nsv-a", metaSource: "nsv", snapshotKind: "ok", delivered: true });
+      expect(doc?.registeredAt?.getTime()).toBe(T0.getTime());
+      expect(doc?.snapshotAt?.getTime()).toBe(T0.getTime());
+      expect(doc?.metaFetchedAt?.getTime()).toBe(T1.getTime());
+      expect(doc?.updatedAt.getTime()).toBe(T1.getTime());
+    });
+
+    it("saveMetaNotFound: 시각만 기록하고 기존 meta 는 유지하며, 문서가 없으면 registered:false 로 만든다. 이후 saveFetchedMeta 가 지운다", async () => {
+      await store.saveMetaNotFound("2222222222222", T0);
+      let doc = await store.get("2222222222222");
+      expect(doc).toMatchObject({ registered: false, snapshot: null, snapshotKind: null, delivered: false });
+      expect(doc?.metaNotFoundAt?.getTime()).toBe(T0.getTime());
+      expect(doc?.meta).toBeUndefined();
+      expect(doc?.metaFetchedAt).toBeUndefined();
+
+      await store.upsertRegistrations([{ invoiceNo: "3333333333333", meta: { productName: "양말" } }], "nsv", T0);
+      await store.saveFetchedMeta("3333333333333", { receiverName: "홍*동" }, T0);
+      await store.saveMetaNotFound("3333333333333", T1);
+      doc = await store.get("3333333333333");
+      expect(doc?.meta).toEqual({ productName: "양말", receiverName: "홍*동" });
+      expect(doc?.metaNotFoundAt?.getTime()).toBe(T1.getTime());
+      expect(doc?.metaFetchedAt?.getTime()).toBe(T0.getTime());
+
+      await store.saveFetchedMeta("3333333333333", { productName: "수건" }, T2);
+      doc = await store.get("3333333333333");
+      expect(doc?.metaNotFoundAt).toBeUndefined();
+      expect(doc?.metaFetchedAt?.getTime()).toBe(T2.getTime());
+      expect(doc?.meta).toEqual({ productName: "수건", receiverName: "홍*동" });
+    });
+
+    it("pull 로 만들어진 미등록 문서를 수집 API 로 등록해도 pull 로 받은 meta 와 metaFetchedAt 은 유지된다", async () => {
+      await store.saveFetchedMeta("4444444444444", { productName: "pull 상품명", receiverAddress: "pull 주소" }, T0);
+      const result = await store.upsertRegistrations(
+        [{ invoiceNo: "4444444444444", meta: { productName: "push 상품명", orderId: "O-9" } }],
+        "nsv",
+        T1,
+      );
+      expect(result).toEqual({ upserted: 1, updated: 0 });
+      const doc = await store.get("4444444444444");
+      expect(doc).toMatchObject({
+        registered: true,
+        meta: { productName: "push 상품명", receiverAddress: "pull 주소", orderId: "O-9" },
+        metaSource: "nsv",
+      });
+      expect(doc?.metaFetchedAt?.getTime()).toBe(T0.getTime());
     });
 
     it("get 은 없는 번호에 null", async () => {

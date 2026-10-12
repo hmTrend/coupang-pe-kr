@@ -2,7 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { loadTrackingData } from "@/lib/deliveryTracker/__fixtures__/load";
-import type { TrackingResult } from "@/lib/tracking";
+import { validateIngestBody } from "@/lib/ingest";
+import { MemoryInvoiceStore } from "@/lib/store/memory";
+import { createTracker, type TrackingMeta, type TrackingResult } from "@/lib/tracking";
 import TrackingView from "./TrackingView";
 
 const NO = "10332152871106";
@@ -44,6 +46,13 @@ describe("TrackingView", () => {
     const rowsOf = (table: string) => table.match(/<tr[\s\S]*?<\/tr>/g) ?? [];
     const cellsOf = (row: string) => (row.match(/<td[\s\S]*?<\/td>/g) ?? []).map(textOf);
     const eventRows = (markup: string) => rowsOf(/<tbody[\s\S]*?<\/tbody>/.exec(tableAt(markup, 0))?.[0] ?? "");
+    /** 수령인 블록 <dl> 의 [라벨, 값] 쌍 */
+    const infoOf = (markup: string) => {
+      const dl = /<dl[\s\S]*?<\/dl>/.exec(markup)?.[0] ?? "";
+      const labels = (dl.match(/<dt[\s\S]*?<\/dt>/g) ?? []).map(textOf);
+      const values = (dl.match(/<dd[\s\S]*?<\/dd>/g) ?? []).map(textOf);
+      return labels.map((label, i) => [label, values[i]]);
+    };
 
     it("상단 카드에 운송장번호 줄이 없고, 하단 택배사 표에만 송장번호가 있다", () => {
       expect(html).not.toContain("운송장번호");
@@ -124,6 +133,177 @@ describe("TrackingView", () => {
       expect(blank).not.toContain(" 님");
       // 택배사 표는 그대로 남는다
       expect(none).toMatch(/<th[^>]*>택배사<\/th>/);
+    });
+
+    describe("등록 정보(meta): 수령인 이름 밑 상품명/받는주소/배송요청사항", () => {
+      const meta: TrackingMeta = {
+        productName: "[노출] 빨간 양말 세트 (L)",
+        receiverAddress: "충청북도 청주시 상당구 용암동 **** 지음프라자 *** 호",
+        deliveryMessage: "직접 받고 부재 시 문 앞 (*********)",
+        receiverName: "김*준",
+      };
+      const withMeta = (m: TrackingMeta | undefined, recipient = data.recipient) =>
+        render({ ...base, data: { ...data, recipient }, meta: m });
+      it("이름(굵게) 바로 밑에 상품명 -> 받는주소 -> 배송요청사항 행이 순서대로 나온다", () => {
+        const markup = withMeta(meta);
+        expect(markup).toMatch(/<p class="font-bold">이\*화 님<\/p><dl/);
+        expect(infoOf(markup)).toEqual([
+          ["상품명", "[노출] 빨간 양말 세트 (L)"],
+          ["받는주소", "충청북도 청주시 상당구 용암동 **** 지음프라자 *** 호"],
+          ["배송요청사항", "직접 받고 부재 시 문 앞 (*********)"],
+        ]);
+        // 라벨은 회색(text-muted), 한 구역 안에서 이름 -> 정보 행 -> (그 아래) 택배사 표 순서
+        expect(markup).toMatch(/<dt class="text-muted">상품명<\/dt>/);
+        expect(markup.indexOf("이*화 님")).toBeLessThan(markup.indexOf("<dl"));
+        expect(markup.indexOf("</dl>")).toBeLessThan(markup.lastIndexOf("<table"));
+        expect(markup.indexOf("</dl>")).toBeLessThan(markup.indexOf("Coupang Logistics Services"));
+      });
+
+      it("택배사 표(택배사/전화번호/송장번호)는 그대로이고 정보 행은 표가 아니다", () => {
+        const markup = withMeta(meta);
+        expect((markup.match(/<table/g) ?? []).length).toBe(2);
+        const rows = rowsOf(tableAt(markup, 1));
+        expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "전화번호", "송장번호"]);
+        expect(rows.map((r) => cellsOf(r)[0])).toEqual(["Coupang Logistics Services", "1544-9898", NO]);
+        expect(eventRows(markup)).toHaveLength(data.events.length);
+      });
+
+      it("값이 없는 행은 숨긴다", () => {
+        expect(infoOf(withMeta({ productName: "양말" }))).toEqual([["상품명", "양말"]]);
+        expect(infoOf(withMeta({ deliveryMessage: "문 앞 (*********)" }))).toEqual([
+          ["배송요청사항", "문 앞 (*********)"],
+        ]);
+        expect(infoOf(withMeta({ productName: "양말", deliveryMessage: "문 앞" }))).toEqual([
+          ["상품명", "양말"],
+          ["배송요청사항", "문 앞"],
+        ]);
+        // 공백뿐인 값도 없는 것으로 본다
+        expect(infoOf(withMeta({ productName: "  ", receiverAddress: "서울 은평구" }))).toEqual([
+          ["받는주소", "서울 은평구"],
+        ]);
+        const none = withMeta({ productName: "" });
+        expect(none).not.toContain("<dl");
+        expect(none).not.toMatch(/상품명|받는주소|배송요청사항/);
+      });
+
+      it("Delivery Tracker 수령인 이름이 있으면 그것을, 없으면 meta.receiverName 을 쓴다", () => {
+        expect(withMeta(meta)).toContain("이*화 님");
+        expect(withMeta(meta)).not.toContain("김*준");
+
+        const fallback = withMeta(meta, null);
+        expect(fallback).toMatch(/<p class="font-bold">김\*준 님<\/p><dl/);
+        const blankName = withMeta(meta, { name: "sir", address: "" }); // 호칭만 있으면 이름 없음으로 본다
+        expect(blankName).toContain("김*준 님");
+        expect(blankName).not.toMatch(/sir/i);
+        // meta 이름에 호칭이 붙어 있어도 " 님" 은 한 번만
+        expect(withMeta({ ...meta, receiverName: "김*준 님" }, null)).not.toContain("님 님");
+      });
+
+      it("이름이 둘 다 없고 아래 정보만 있으면 이름 줄 없이 정보 행만 표시한다", () => {
+        const markup = withMeta({ productName: "양말", receiverAddress: "서울 은평구" }, null);
+        expect(markup).not.toContain(" 님");
+        expect(markup).not.toContain('<p class="font-bold">');
+        expect(infoOf(markup)).toEqual([
+          ["상품명", "양말"],
+          ["받는주소", "서울 은평구"],
+        ]);
+        // 첫 요소라 위쪽 간격(mt-2.5)이 붙지 않는다
+        expect(markup).toMatch(/<div class="mb-3 border-b border-line pb-3 text-sm"><dl class="grid [^"]*"><dt/);
+        expect(markup).not.toContain("mt-2.5");
+      });
+
+      it("API 지역(recipient.address)은 등록된 받는주소가 없을 때만 지금처럼 보여준다", () => {
+        const recipient = { name: "이*화", address: "서울 은평구" };
+        // receiverAddress 가 없으면: 이름 -> 지역 줄 -> 정보 행
+        const noAddress = withMeta({ productName: "양말" }, recipient);
+        expect(noAddress).toMatch(/<p class="font-bold">이\*화 님<\/p><p[^>]*>서울 은평구<\/p><dl/);
+        expect(infoOf(noAddress)).toEqual([["상품명", "양말"]]);
+        // receiverAddress 가 있으면 지역 줄은 숨기고 받는주소 행만 쓴다
+        const withAddress = withMeta({ receiverAddress: "경기도 성남시 ***" }, recipient);
+        expect(withAddress).not.toContain("서울 은평구");
+        expect(infoOf(withAddress)).toEqual([["받는주소", "경기도 성남시 ***"]]);
+      });
+
+      it("미등록 번호(meta 없음/빈 meta)는 정보 행 없이 기존과 같은 화면이다", () => {
+        for (const m of [undefined, {}] as const) {
+          const markup = withMeta(m);
+          expect(markup).not.toContain("<dl");
+          expect(markup).toMatch(/<p class="font-bold">이\*화 님<\/p><\/div>/);
+        }
+        expect(withMeta(undefined)).toBe(withMeta({}));
+        expect(withMeta(undefined)).toBe(html);
+        // meta 도 수령인도 없으면 블록 전체를 숨기는 기존 동작
+        const nothing = withMeta(undefined, null);
+        expect(nothing).not.toContain(" 님");
+        expect(nothing).toMatch(/<th[^>]*>택배사<\/th>/);
+      });
+
+      it("긴 상품명·주소가 360px 폭에서 가로로 넘치지 않게 칸 폭과 줄바꿈을 제한한다", () => {
+        const markup = withMeta({ productName: "아주긴상품명".repeat(30), receiverAddress: "가".repeat(200) });
+        // 라벨 칸은 고정, 값 칸은 minmax(0,1fr) + min-w-0 로 줄어들어 줄바꿈된다
+        expect(markup).toMatch(/<dl class="grid grid-cols-\[5\.5rem_minmax\(0,1fr\)\] /);
+        expect((markup.match(/<dd class="min-w-0">/g) ?? []).length).toBe(2);
+        expect(markup).not.toMatch(/whitespace-nowrap[^>]*>(?:아주긴|가가)/);
+      });
+
+      it("값은 HTML 이스케이프되어 나간다", () => {
+        const markup = withMeta({ productName: '<img src=x onerror="alert(1)">' });
+        expect(markup).not.toContain("<img");
+        expect(markup).toContain("&lt;img");
+      });
+
+      it("복사 버튼/출처 문구가 없다 (등록 정보가 있어도)", () => {
+        const markup = withMeta(meta);
+        expect(markup).not.toContain("<button");
+        expect(markup).not.toContain("복사");
+        expect(markup).not.toMatch(/출처|공식 사이트|공식사이트/);
+        // 상단 카드에는 등록 정보가 나오지 않는다 (수령인 블록에만)
+        expect(markup.split("이동 내역")[0]).not.toContain("빨간 양말");
+      });
+    });
+
+    it("수집 -> 저장 -> 조회 -> 화면 전체 흐름에서 원본 숫자는 화면 HTML 에 나오지 않는다", async () => {
+      const parsed = validateIngestBody({
+        items: [
+          {
+            invoiceNo: NO,
+            orderId: "ORD-SECRET-1",
+            memo: "내부메모-유출금지",
+            productName: "[노출] 빨간 양말 세트 (L)",
+            receiverName: "김*준",
+            // NSV 가 가리지 못하고 원본 그대로 보낸 경우를 가정한다
+            receiverAddress: "충청북도 청주시 상당구 용암동 1234 지음프라자 101동 1203호 (010-1234-5678)",
+            deliveryMessage: "직접 받고 부재 시 문 앞 (공동현관 5678) 비번 9999 #7777 연락 010-1234-5678",
+          },
+        ],
+      });
+      if (!parsed.ok) throw new Error("검증 실패");
+      const store = new MemoryInvoiceStore();
+      await store.upsertRegistrations(parsed.items, "nsv", new Date("2026-10-08T01:00:00Z"));
+      const tracker = createTracker({
+        store,
+        fetchUpstream: async () => ({ kind: "ok", data }),
+        now: () => Date.parse("2026-10-08T10:00:00Z"),
+        config: {
+          cacheTtlMs: 120_000,
+          notFoundTtlMs: 60_000,
+          minForceRefreshMs: 30_000,
+          deliveredRecheckMs: 3_600_000,
+          allowUnregisteredLookup: true,
+        },
+      });
+
+      const markup = render(await tracker(NO));
+      expect(infoOf(markup)).toEqual([
+        ["상품명", "[노출] 빨간 양말 세트 (L)"],
+        ["받는주소", "충청북도 청주시 상당구 용암동 **** 지음프라자 ***동 ****호 (****)"],
+        ["배송요청사항", "직접 받고 부재 시 문 앞 (*********) 비번 **** **** 연락 ****"],
+      ]);
+      for (const raw of ["1234", "1203", "101동", "010-1234-5678", "5678", "9999", "7777", "ORD-SECRET-1", "내부메모"]) {
+        expect(markup, raw).not.toContain(raw);
+      }
+      // 이름은 Delivery Tracker 값이 우선
+      expect(markup).toContain("이*화 님");
     });
 
     it("택배사 표는 택배사/전화번호/송장번호 3행이다", () => {

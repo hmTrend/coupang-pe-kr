@@ -33,6 +33,53 @@ afterEach(() => {
   __resetDefaultClientForTest();
 });
 
+describe("GET /api/track/[invoiceNo] - 등록 정보(meta)", () => {
+  async function registerAndTrack(meta: Record<string, string>) {
+    stubCredentials();
+    const store = new MemoryInvoiceStore();
+    __setStoreForTest(store);
+    await store.upsertRegistrations([{ invoiceNo: NO, meta }], "nsv-operator", new Date());
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json(loadGraphql("delivered")));
+    return call(NO);
+  }
+
+  const fullMeta = {
+    orderId: "ORD-SECRET-1",
+    productName: "[노출] 빨간 양말 (L)",
+    receiverName: "김*준",
+    receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 *** 호",
+    deliveryMessage: "직접 받고 부재 시 문 앞 (*********)",
+    orderedAt: "2026-10-08T09:00:00+09:00",
+    memo: "내부메모-유출금지",
+  };
+
+  it("공개 JSON 에는 화면용 meta 4개만 나가고 orderId/memo/orderedAt/operator 는 없다", async () => {
+    const res = await registerAndTrack(fullMeta);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta).toEqual({
+      productName: "[노출] 빨간 양말 (L)",
+      receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 *** 호",
+      deliveryMessage: "직접 받고 부재 시 문 앞 (*********)",
+      receiverName: "김*준",
+    });
+    const text = JSON.stringify(body);
+    for (const leaked of ["ORD-SECRET-1", "내부메모-유출금지", "2026-10-08T09:00:00+09:00", "nsv-operator", "orderId", "memo", "operator", "orderedAt"]) {
+      expect(text, leaked).not.toContain(leaked);
+    }
+    // 조회 결과 자체는 그대로
+    expect(body).toMatchObject({ status: "ok", invoiceNo: NO, stale: false });
+  });
+
+  it("미등록 번호의 공개 JSON 에는 meta 키가 없다", async () => {
+    stubCredentials();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json(loadGraphql("delivered")));
+    const body = await (await call(NO)).json();
+    expect(body.status).toBe("ok");
+    expect("meta" in body).toBe(false);
+  });
+});
+
 describe("GET /api/track/[invoiceNo]", () => {
   it("유효하지 않은 번호는 400 + invalid JSON (업스트림 호출 없음)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");

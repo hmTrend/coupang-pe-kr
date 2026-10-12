@@ -89,6 +89,35 @@ export function deliveryTrackerConfig(): DeliveryTrackerConfig {
   };
 }
 
+export interface NsvConfig {
+  /** NSV_GRAPHQL_URLS 원문 (쉼표·공백·줄바꿈 구분). 파싱·검증은 nsv/client 에서 한다. 비어 있으면 NSV 조회 기능이 꺼진다 */
+  graphqlUrls: string | undefined;
+  /** 엔드포인트 1곳당 타임아웃 */
+  timeoutMs: number;
+}
+
+export function nsvConfig(): NsvConfig {
+  return {
+    graphqlUrls: optionalEnv("NSV_GRAPHQL_URLS"),
+    timeoutMs: intEnv("NSV_GRAPHQL_TIMEOUT_MS", 3_000, 1),
+  };
+}
+
+/** NSV 에서 받아온 meta 를 다시 조회하지 않는 기간 */
+export interface NsvMetaPolicy {
+  /** 받아온 meta 가 신선한 기간. 지나면 다시 조회해 갱신한다 (push 로 들어온 meta 포함) */
+  ttlMs: number;
+  /** NSV 가 "없음"으로 답한 번호를 다시 묻지 않는 기간 (음성 캐시) */
+  negativeTtlMs: number;
+}
+
+export function nsvMetaPolicy(): NsvMetaPolicy {
+  return {
+    ttlMs: intEnv("NSV_META_TTL_MS", 600_000),
+    negativeTtlMs: intEnv("NSV_META_NEGATIVE_TTL_MS", 120_000),
+  };
+}
+
 export function mongoConfig(): { uri: string | undefined; db: string } {
   const uri = process.env.MONGODB_URI?.trim();
   return {

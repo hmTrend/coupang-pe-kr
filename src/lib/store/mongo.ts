@@ -2,6 +2,7 @@
 import { MongoClient, type AnyBulkWriteOperation, type Collection, type Filter } from "mongodb";
 import type {
   InvoiceDoc,
+  InvoiceMeta,
   InvoiceStore,
   ListQuery,
   ListResult,
@@ -175,6 +176,51 @@ export class MongoInvoiceStore implements InvoiceStore {
       { _id: invoiceNo },
       {
         $set: { lastAttemptAt: now, lastError: error.slice(0, 300), updatedAt: now },
+        $setOnInsert: {
+          registered: false,
+          createdAt: now,
+          snapshot: null,
+          snapshotKind: null,
+          snapshotAt: null,
+          delivered: false,
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  async saveFetchedMeta(invoiceNo: string, meta: InvoiceMeta, now: Date): Promise<void> {
+    const col = await this.collection();
+    // 값이 있는 필드만 dotted-path 로 설정 → 빈 값이 기존 meta 를 지우지 않고, 안 보낸 필드도 유지된다
+    const set: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(meta)) {
+      if (typeof value === "string" && value.trim() !== "") set[`meta.${key}`] = value;
+    }
+    await col.updateOne(
+      { _id: invoiceNo },
+      {
+        $set: { ...set, metaFetchedAt: now, metaSource: "nsv", updatedAt: now },
+        $unset: { metaNotFoundAt: "" },
+        // 조회만 된 번호는 registered:false 로 캐시 문서를 만든다 (이미 있으면 등록 상태·스냅샷은 그대로)
+        $setOnInsert: {
+          registered: false,
+          createdAt: now,
+          snapshot: null,
+          snapshotKind: null,
+          snapshotAt: null,
+          delivered: false,
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  async saveMetaNotFound(invoiceNo: string, now: Date): Promise<void> {
+    const col = await this.collection();
+    await col.updateOne(
+      { _id: invoiceNo },
+      {
+        $set: { metaNotFoundAt: now, updatedAt: now },
         $setOnInsert: {
           registered: false,
           createdAt: now,

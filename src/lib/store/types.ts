@@ -3,8 +3,13 @@ import type { TrackingData } from "@/lib/deliveryTracker/types";
 
 export interface InvoiceMeta {
   orderId?: string;
+  /** 노출상품명(옵션명). 고객 화면에 표시된다 */
   productName?: string;
   receiverName?: string;
+  /** 수취인 주소. NSV 가 마스킹해서 보내고, 사이트도 저장 전에 한 번 더 마스킹한다 (고객 화면 표시용) */
+  receiverAddress?: string;
+  /** 배송요청사항. 주소와 같이 마스킹된 값만 저장한다 (고객 화면 표시용) */
+  deliveryMessage?: string;
   /** NSV 가 보낸 주문 시각 문자열 (그대로 보관) */
   orderedAt?: string;
   memo?: string;
@@ -20,6 +25,12 @@ export interface InvoiceDoc {
   operator?: string;
   meta?: InvoiceMeta;
   registeredAt?: Date;
+  /** NSV GraphQL 조회(pull)로 meta 를 마지막으로 채운 시각. push(수집 API)로만 들어온 meta 에는 없다 */
+  metaFetchedAt?: Date;
+  /** metaFetchedAt 의 출처. 지금은 NSV pull 만 기록한다 */
+  metaSource?: "nsv";
+  /** NSV 가 "해당 번호 없음"으로 답한 시각 (음성 캐시). meta 를 다시 받으면 지워진다 */
+  metaNotFoundAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   /** 마지막으로 성공한 조회 결과 (kind === 'ok' 일 때만) */
@@ -77,6 +88,14 @@ export interface InvoiceStore {
   saveSnapshot(invoiceNo: string, input: SnapshotInput, now: Date): Promise<void>;
   /** 조회 실패 기록. 기존 스냅샷은 건드리지 않는다 */
   saveAttemptError(invoiceNo: string, error: string, now: Date): Promise<void>;
+  /**
+   * NSV 조회(pull)로 받은 meta 를 병합 저장한다. 값이 있는 필드만 덮고(빈 값은 기존 값을 지우지 않음)
+   * metaFetchedAt / metaSource:'nsv' 를 기록하며 metaNotFoundAt 은 지운다. 문서가 없으면 registered:false 로 만든다.
+   * registered / operator / registeredAt 와 스냅샷은 건드리지 않는다.
+   */
+  saveFetchedMeta(invoiceNo: string, meta: InvoiceMeta, now: Date): Promise<void>;
+  /** NSV 가 "없음"으로 답한 시각을 기록한다(음성 캐시). 기존 meta 는 그대로 둔다. 문서가 없으면 registered:false 로 만든다 */
+  saveMetaNotFound(invoiceNo: string, now: Date): Promise<void>;
   /** 등록된 번호 목록 (최신 등록순) */
   listRegistered(query: ListQuery): Promise<ListResult>;
 }

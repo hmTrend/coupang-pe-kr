@@ -84,6 +84,47 @@ describe("POST /api/invoices", () => {
     expect(doc?.meta).toEqual({ orderId: "O1", productName: "양말", memo: "재전송" });
   });
 
+  it("주소/배송메시지를 받아 마스킹된 값만 저장하고, 일부만 재전송하면 나머지는 유지한다", async () => {
+    const first = await POST(
+      request(
+        {
+          items: [
+            {
+              invoiceNo: "10332152871106",
+              productName: "[노출] 양말 (L)",
+              receiverAddress: "충청북도 청주시 용암동 1234 지음프라자 101호",
+              deliveryMessage: "문 앞 (공동현관 1234) 비번 5678",
+              orderId: "O1",
+            },
+            { invoiceNo: "10332152871107", receiverAddress: { bad: true } },
+          ],
+        },
+        auth,
+      ),
+    );
+    expect(await first.json()).toMatchObject({
+      ok: true,
+      upserted: 1,
+      invalid: [{ index: 1, invoiceNo: "10332152871107", reason: "invalid_type:receiverAddress" }],
+    });
+    expect((await store.get("10332152871106"))?.meta).toEqual({
+      orderId: "O1",
+      productName: "[노출] 양말 (L)",
+      receiverAddress: "충청북도 청주시 용암동 **** 지음프라자 ***호",
+      deliveryMessage: "문 앞 (*********) 비번 ****",
+    });
+    expect(await store.get("10332152871107")).toBeNull();
+
+    // 주소만 다시 보낸다: 배송메시지·상품명은 지워지지 않는다
+    await POST(request({ items: [{ invoiceNo: "10332152871106", receiverAddress: "서울 은평구 연서로 12-3" }] }, auth));
+    expect((await store.get("10332152871106"))?.meta).toEqual({
+      orderId: "O1",
+      productName: "[노출] 양말 (L)",
+      receiverAddress: "서울 은평구 연서로 ***",
+      deliveryMessage: "문 앞 (*********) 비번 ****",
+    });
+  });
+
   it("JSON 이 아니면 400, 501건이면 413, 빈 items 면 400", async () => {
     expect((await POST(request(null, auth, "{not json"))).status).toBe(400);
     const many = { items: Array.from({ length: 501 }, (_, i) => ({ invoiceNo: String(10_000_000_000_000 + i) })) };
