@@ -70,9 +70,9 @@ describe("TrackingView", () => {
       expect(html).not.toContain("복사");
     });
 
-    it("전화번호는 문의 연락처(기본 010-3277-0737)이고 번호 자체가 tel 링크, 오른쪽 끝에 문자보내기", () => {
-      const row = rowsOf(tableAt(html, 1)).find((r) => r.includes(">전화번호<")) ?? "";
-      expect(textOf(row)).toBe("전화번호 010-3277-0737 문자보내기");
+    it("배송문의 줄은 문의 연락처(기본 010-3277-0737)이고 번호 자체가 tel 링크, 오른쪽 끝에 문자보내기", () => {
+      const row = rowsOf(tableAt(html, 1)).find((r) => r.includes(">배송문의<")) ?? "";
+      expect(textOf(row)).toBe("배송문의 010-3277-0737 문자보내기");
       // 택배사 대표번호와 별도 전화하기 버튼은 없다
       expect(html).not.toContain("1544-9898");
       expect(html).not.toContain("전화하기");
@@ -192,11 +192,11 @@ describe("TrackingView", () => {
         expect(markup.indexOf("</dl>")).toBeLessThan(markup.indexOf("Coupang Logistics Services"));
       });
 
-      it("택배사 표(택배사/전화번호/송장번호)는 그대로이고 정보 행은 표가 아니다", () => {
+      it("택배사 표(택배사/배송문의/송장번호)는 그대로이고 정보 행은 표가 아니다", () => {
         const markup = withMeta(meta);
         expect((markup.match(/<table/g) ?? []).length).toBe(2);
         const rows = rowsOf(tableAt(markup, 1));
-        expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "전화번호", "송장번호"]);
+        expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "배송문의", "송장번호"]);
         expect(rows.map((r) => cellsOf(r)[0])).toEqual([
           "Coupang Logistics Services",
           "010-3277-0737 문자보내기",
@@ -343,9 +343,9 @@ describe("TrackingView", () => {
       expect(markup).toContain("이*화 님");
     });
 
-    it("택배사 표는 택배사/전화번호/송장번호 3행이다", () => {
+    it("택배사 표는 택배사/배송문의/송장번호 3행이다", () => {
       const rows = rowsOf(tableAt(html, 1));
-      expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "전화번호", "송장번호"]);
+      expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "배송문의", "송장번호"]);
       expect(rows.map((r) => cellsOf(r)[0])).toEqual([
         "Coupang Logistics Services",
         "010-3277-0737 문자보내기",

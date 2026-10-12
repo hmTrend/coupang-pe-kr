@@ -144,8 +144,8 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
         <table className="w-full text-sm">
           <tbody className="divide-y divide-line">
             {courier?.name && <CourierRow label="택배사">{courier.name}</CourierRow>}
-            {/* 택배사 대표번호 대신 문의 연락처를 보여준다 */}
-            <CourierRow label="전화번호">
+            {/* 택배사 대표번호 대신 판매처 배송문의 연락처를 보여준다. 고객 본인 번호로 오해하지 않게 라벨을 "배송문의" 로 둔다 */}
+            <CourierRow label="배송문의">
               <ContactCell phone={contactPhone()} invoiceNo={invoiceNo} customerName={recipientName} />
             </CourierRow>
             <CourierRow label="송장번호">{invoiceNo}</CourierRow>
