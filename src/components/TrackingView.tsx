@@ -72,7 +72,7 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
             {latest.location && <> · {latest.location}</>}
           </p>
         )}
-        <div className="mt-6">
+        <div className="mt-5">
           <StepBar steps={data.steps} />
         </div>
       </section>

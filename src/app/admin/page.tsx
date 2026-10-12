@@ -57,7 +57,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <Shell wide>
+    <Shell wide banner={false}>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

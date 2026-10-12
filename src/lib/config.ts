@@ -26,6 +26,15 @@ export function siteUrl(): string | undefined {
   return v ? v : undefined;
 }
 
+/** 쿠팡 파트너스 기본 링크 (NEXT_PUBLIC_COUPANG_PARTNERS_URL 이 없거나 http(s) 주소가 아니면 이 값을 쓴다) */
+export const DEFAULT_COUPANG_PARTNERS_URL = "https://link.coupang.com/a/bQkvJ5";
+
+/** 쿠팡 홈 바로가기 배너 링크. NEXT_PUBLIC_* 는 빌드 시점에 인라인되므로 직접 참조해야 한다 */
+export function coupangPartnersUrl(): string {
+  const v = process.env.NEXT_PUBLIC_COUPANG_PARTNERS_URL?.trim();
+  return v && /^https?:\/\//i.test(v) ? v : DEFAULT_COUPANG_PARTNERS_URL;
+}
+
 export interface TrackingConfig {
   /** ok 스냅샷 신선 기간 */
   cacheTtlMs: number;

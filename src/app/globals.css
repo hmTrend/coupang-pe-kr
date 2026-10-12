@@ -14,6 +14,11 @@
   --warn-fg: #8a5a00;
   --warn-line: #f5d78a;
   --danger: #b42318;
+  /* 단계바: 남색 패널 + 초록 활성. 패널 자체가 어두운 색이라 다크모드에서도 그대로 쓴다 */
+  --step-panel: #34465e;
+  --step-active: #5cb46d;
+  --step-inactive: rgba(255, 255, 255, 0.12);
+  --step-muted: rgba(255, 255, 255, 0.55);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -46,6 +51,10 @@
   --color-warn-fg: var(--warn-fg);
   --color-warn-line: var(--warn-line);
   --color-danger: var(--danger);
+  --color-step-panel: var(--step-panel);
+  --color-step-active: var(--step-active);
+  --color-step-inactive: var(--step-inactive);
+  --color-step-muted: var(--step-muted);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI",
     Roboto, sans-serif;

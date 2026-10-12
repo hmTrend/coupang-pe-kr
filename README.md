@@ -47,6 +47,7 @@ Tracking API 는 매 요청에 Client Secret 을 요구한다(`Authorization: TR
 | --- | --- | --- |
 | `NEXT_PUBLIC_SITE_NAME` | `배송조회` | 사이트 이름. 빌드 시점에 인라인되므로 바꾸면 재빌드 필요 |
 | `NEXT_PUBLIC_SITE_URL` | (없음) | 공개 URL. 미리보기용 `metadataBase` |
+| `NEXT_PUBLIC_COUPANG_PARTNERS_URL` | `https://link.coupang.com/a/bQkvJ5` | 쿠팡 홈 바로가기 배너(상단/하단)의 쿠팡 파트너스 링크. http(s) 주소만 허용, 재빌드 필요 |
 | `DELIVERY_TRACKER_CLIENT_ID` | (없음) | Delivery Tracker Client Id. Tracking Link 보조 버튼에도 쓴다 |
 | `DELIVERY_TRACKER_CLIENT_SECRET` | (없음) | Client Secret (**비밀값**, 서버 전용). 없으면 조회 불가(`not_configured`) |
 | `DELIVERY_TRACKER_CARRIER_ID` | `kr.coupangls` | 택배사 ID |
@@ -202,7 +203,7 @@ src/
     api/track/[invoiceNo]/       조회 JSON
     api/invoices/                수집 API
     api/health/  go/
-  components/                    StepBar, EventTable, TrackingView, CopyButton(관리자), InvoiceForm ...
+  components/                    StepBar, EventTable, TrackingView, CoupangHomeBanner(Shell 상·하단), CopyButton(관리자), InvoiceForm ...
   lib/
     deliveryTracker/client.ts    Tracking API 호출: GraphQL, 타임아웃, in-flight dedup, 결과 분류, 호출 제한 백오프
     deliveryTracker/map.ts       순수 함수: API 응답 -> TrackingData (픽스처: __fixtures__/)
