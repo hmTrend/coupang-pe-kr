@@ -34,12 +34,12 @@ export default function InvoiceForm({ initial = "" }: { initial?: string }) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="운송장번호 (숫자 10~16자리)"
-        className="h-14 w-full rounded-xl border border-line bg-card px-4 text-lg tabular-nums outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
+        className="h-14 w-full rounded-lg border border-line bg-card px-4 text-lg tabular-nums outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
       />
       <button
         type="submit"
         disabled={pending}
-        className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg transition-opacity active:scale-[0.99] disabled:opacity-60"
+        className="h-14 w-full rounded-lg bg-accent text-base font-bold text-accent-fg transition-colors hover:bg-accent-hover active:scale-[0.99] disabled:opacity-60"
       >
         {pending ? "조회 중…" : "조회하기"}
       </button>

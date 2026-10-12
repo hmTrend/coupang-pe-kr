@@ -1,18 +1,18 @@
 import type { TrackingData } from "@/lib/deliveryTracker/types";
-import { formatKstClock, formatKstDateTime, shortDateTime, statusLabel } from "@/lib/format";
+import { formatKstClock, formatKstDateTime, shortDateTime, statusLabel, stripHonorific } from "@/lib/format";
 import type { TrackingResult } from "@/lib/tracking";
 import EventTable from "./EventTable";
 import InvoiceForm from "./InvoiceForm";
 import StepBar from "./StepBar";
 
-const card = "rounded-2xl border border-line bg-card p-5";
+const card = "rounded-lg border border-line bg-card p-5";
 
 function RefreshLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     // 서버 렌더 + 일반 링크라 JS 없이도 동작한다
     <a
       href={href}
-      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-line px-3.5 text-sm font-medium transition-colors hover:bg-accent-soft"
+      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent px-3.5 text-sm font-bold text-accent-text transition-colors hover:bg-accent-soft"
     >
       <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden="true">
         <path
@@ -32,7 +32,7 @@ function StaleBanner() {
   return (
     <div
       role="status"
-      className="rounded-xl border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-relaxed text-warn-fg"
+      className="rounded-lg border border-warn-line bg-warn-bg px-4 py-3 text-sm leading-relaxed text-warn-fg"
     >
       실시간 조회가 잠시 지연되어 마지막으로 확인한 정보를 보여드려요
     </div>
@@ -53,7 +53,9 @@ function CourierRow({ label, children }: { label: string; children: React.ReactN
 function OkView({ result, data }: { result: TrackingResult; data: TrackingData }) {
   const { latest, recipient, courier } = data;
   const invoiceNo = courier?.invoiceNo || data.invoiceNo;
-  const hasRecipient = Boolean(recipient?.name || recipient?.address);
+  // 예전에 저장된 스냅샷에는 " sir" 같은 호칭이 남아 있을 수 있어 렌더 시점에도 한 번 더 뗀다
+  const recipientName = stripHonorific(recipient?.name ?? "");
+  const hasRecipient = Boolean(recipientName || recipient?.address);
   const checkedAt = result.stale
     ? formatKstDateTime(result.fetchedAt ? new Date(result.fetchedAt) : undefined)
     : formatKstClock(result.fetchedAt);
@@ -63,7 +65,7 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
       {result.stale && <StaleBanner />}
 
       <section className={card}>
-        <h1 className={`text-3xl font-extrabold tracking-tight ${data.delivered ? "text-accent" : ""}`}>
+        <h1 className={`text-3xl font-extrabold tracking-tight ${data.delivered ? "text-accent-text" : ""}`}>
           {statusLabel(data)}
         </h1>
         {latest && (
@@ -86,7 +88,7 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
         {hasRecipient && (
           // 모달과 같은 구성: 첫 줄 이름(굵게), 둘째 줄 지역. 지역이 비면 둘째 줄을 숨긴다
           <div className="mb-3 border-b border-line pb-3 text-sm">
-            {recipient?.name && <p className="font-bold">{recipient.name} 님</p>}
+            {recipientName && <p className="font-bold">{recipientName} 님</p>}
             {recipient?.address && <p className="mt-0.5 text-muted">{recipient.address}</p>}
           </div>
         )}
@@ -120,7 +122,7 @@ function NotFoundView({ result }: { result: TrackingResult }) {
       <section className={`${card} text-center`}>
         <div
           aria-hidden="true"
-          className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent"
+          className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-text"
         >
           <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none">
             <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" />
@@ -181,7 +183,7 @@ function UnavailableView({ result, fallbackLink }: { result: TrackingResult; fal
             href={fallbackLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-9 items-center rounded-full bg-accent px-3.5 text-sm font-bold text-accent-fg"
+            className="inline-flex h-9 items-center rounded-md bg-accent px-3.5 text-sm font-bold text-accent-fg transition-colors hover:bg-accent-hover"
           >
             배송조회 페이지에서 보기
           </a>

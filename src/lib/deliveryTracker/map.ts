@@ -5,7 +5,7 @@
 //  - location 은 null 이고 description = "{상태} - {위치}" (예: "집하 - 인천28HUB")
 //  - time 은 RFC3339 (화면에는 KST "yyyy-MM-dd HH:mm:ss" 로 내보낸다)
 import { COUPANGLS_CARRIER_ID } from "@/lib/config";
-import { formatKstFull } from "@/lib/format";
+import { formatKstFull, stripHonorific } from "@/lib/format";
 import type { ApiEvent, ApiTrackInfo, TrackingData, TrackingEvent, TrackingStep } from "./types";
 
 /** 단계바 라벨 (고정). 인덱스가 곧 진행 순서다 */
@@ -80,13 +80,9 @@ function eventStep(event: ApiEvent): number | null {
   return stepByName(event.status?.name) ?? stepByCode(event.status?.code);
 }
 
-// 호스팅 API 는 coupangls 영문 페이지를 읽는지 수령인 이름 뒤에 " sir" 를 붙여 준다 (실측 2026-10-13: "권*성 sir").
-// 화면에서 " 님" 을 따로 붙이므로 호칭은 떼어 낸다.
-const RECIPIENT_HONORIFIC = /\s*(?:님|sir|ma'?am|mr\.?|ms\.?)$/i;
-
 /** 수령인 이름에서 끝의 호칭을 뗀다 */
 function recipientName(name: string | null | undefined): string {
-  return squash(name, MAX_LEN.name).replace(RECIPIENT_HONORIFIC, "").trim();
+  return stripHonorific(squash(name, MAX_LEN.name));
 }
 
 /** "{상태} - {위치}" 의 위치. 구분자가 없으면 location.name, 둘 다 없으면 빈 문자열 */

@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DeliveryTrackerConfig } from "@/lib/config";
 import { FIXTURE_INVOICE_NO, loadGraphql } from "./__fixtures__/load";
-import { DeliveryTrackerClient, RATE_LIMIT_BACKOFF_MS, TRACK_QUERY } from "./client";
+import {
+  __resetDefaultClientForTest,
+  DeliveryTrackerClient,
+  getDefaultClient,
+  RATE_LIMIT_BACKOFF_MS,
+  TRACK_QUERY,
+} from "./client";
 
 const NO = FIXTURE_INVOICE_NO;
 const SECRET = "s3cr3t-value-DO-NOT-LOG";
@@ -332,5 +338,21 @@ describe("로그 안전성", () => {
       expect(line).not.toContain(bodyMarker);
       expect(line).not.toContain("TRACKQL-API-KEY");
     }
+  });
+});
+
+describe("전역 클라이언트(getDefaultClient)", () => {
+  afterEach(() => __resetDefaultClientForTest());
+
+  it("같은 모듈 안에서는 인스턴스를 재사용한다", () => {
+    expect(getDefaultClient()).toBe(getDefaultClient());
+  });
+
+  it("핫리로드 전 모듈이 만든 인스턴스(다른 클래스)는 버리고 새로 만든다", () => {
+    class OldClient {}
+    (globalThis as unknown as { __deliveryTrackerClient?: unknown }).__deliveryTrackerClient = new OldClient();
+    const fresh = getDefaultClient();
+    expect(fresh).toBeInstanceOf(DeliveryTrackerClient);
+    expect(getDefaultClient()).toBe(fresh);
   });
 });

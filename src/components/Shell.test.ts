@@ -84,10 +84,41 @@ describe("쿠팡 홈 바로가기 배너", () => {
     expect(html).toContain("로켓배송 상품 둘러보기");
   });
 
-  it("텍스트와 아이콘만 쓰고 로고 이미지는 쓰지 않는다", () => {
+  it("텍스트 워드마크 + 화살표 아이콘만 쓰고 로고 이미지는 쓰지 않는다", () => {
     const html = shell(null);
     expect(html).not.toContain("<img");
     expect(html).toContain("<svg");
+    // 접근성 이름은 고정, 워드마크는 스크린리더에서 숨긴다
+    expect(bannerLinks(html)).toHaveLength(2);
+    for (const link of bannerLinks(html)) expect(link).toContain('aria-label="쿠팡 홈 바로가기"');
+    const wordmarks = html.match(/<span aria-hidden="true" class="[^"]*">(?:<span class="[^"]*">[a-z]+<\/span>)+<\/span>/g) ?? [];
+    expect(wordmarks).toHaveLength(2);
+    // 글자별 색: cou(갈색 토큰) / p(레드) / a(노랑) / n(라임) / g(하늘)
+    const letters = [...wordmarks[0]!.matchAll(/<span class="([^"]*)">([a-z]+)<\/span>/g)].map((m) => [m[2], m[1]]);
+    expect(letters).toEqual([
+      ["cou", "text-wordmark-ink"],
+      ["p", "text-[#e52528]"],
+      ["a", "text-[#f5b335]"],
+      ["n", "text-[#b8d432]"],
+      ["g", "text-[#58c1e8]"],
+    ]);
+    expect(wordmarks[0]).toMatch(/font-extrabold/);
+    expect(wordmarks[0]).toMatch(/lowercase/);
+    expect(wordmarks[0]).toMatch(/tracking-tighter/);
+    // "홈 바로가기" 는 블루 강조색, 보조 문구는 muted
+    expect(html).toMatch(/<span class="[^"]*text-accent-text[^"]*">홈 바로가기<\/span>/);
+    expect(html).toMatch(/<span class="[^"]*text-muted[^"]*">로켓배송 상품 둘러보기<\/span>/);
+  });
+
+  it("배너는 흰 카드 + 얇은 테두리이고 hover/active 에서만 블루 톤이 된다", () => {
+    const [link] = bannerLinks(shell(null));
+    expect(link).toMatch(/class="[^"]*\bbg-card\b/);
+    expect(link).toMatch(/class="[^"]*\bborder\b[^"]*\bborder-line\b/);
+    expect(link).toMatch(/\bhover:border-accent\b/);
+    expect(link).toMatch(/\bhover:bg-accent-soft\b/);
+    expect(link).toMatch(/\bactive:bg-accent-soft\b/);
+    // 꽉 찬 블루/틸 배경이 아니다
+    expect(link).not.toMatch(/\sbg-accent\s|\sbg-accent"/);
   });
 
   it("NEXT_PUBLIC_COUPANG_PARTNERS_URL 로 링크를 바꿀 수 있다", () => {

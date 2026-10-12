@@ -101,6 +101,21 @@ describe("TrackingView", () => {
       expect(withAddress).toMatch(/<p class="font-bold">이\*화 님<\/p><p[^>]*>서울 은평구<\/p>/);
     });
 
+    it("스냅샷에 호칭(sir/님)이 남아 있어도 화면에는 이름 + ' 님' 한 번만 나온다", () => {
+      const withName = (name: string) => render({ ...base, data: { ...data, recipient: { name, address: "" } } });
+      const sir = withName("권*성 sir");
+      expect(sir).toContain("권*성 님");
+      expect(sir).not.toMatch(/sir/i);
+      expect(withName("권*성 SIR")).not.toMatch(/sir/i);
+      const already = withName("이*화 님");
+      expect(already).toContain("이*화 님</p>");
+      expect(already).not.toContain("님 님");
+      // 호칭만 있으면 이름 줄(과 블록)을 숨긴다
+      const only = withName("sir");
+      expect(only).not.toMatch(/sir/i);
+      expect(only).not.toContain(" 님");
+    });
+
     it("수령인 정보가 없으면 수령인 블록 전체를 숨긴다", () => {
       const none = render({ ...base, data: { ...data, recipient: null } });
       expect(none).not.toContain("이*화");

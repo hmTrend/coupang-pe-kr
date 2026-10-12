@@ -27,7 +27,7 @@ describe("StepBar", () => {
     const items = itemsOf(html);
     expect(items).toHaveLength(5);
     expect(items.map((li) => LABELS.find((l) => li.includes(`>${l}</span>`)))).toEqual(LABELS);
-    expect(html).toMatch(/^<div class="(?=[^"]*\bbg-step-panel\b)(?=[^"]*\brounded-xl\b)/);
+    expect(html).toMatch(/^<div class="(?=[^"]*\bbg-step-panel\b)(?=[^"]*\brounded-lg\b)/);
     expect(html).toContain('aria-label="배송 단계"');
     expect(html).toContain("grid-template-columns:repeat(5, minmax(0, 1fr))");
     // 360px 에서 "배송완료" 가 줄바꿈되지 않게 한다

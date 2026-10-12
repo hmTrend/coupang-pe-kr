@@ -75,13 +75,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               className="h-10 w-64 rounded-lg border border-line bg-card px-3 text-sm outline-none focus:border-accent"
               aria-label="검색어"
             />
-            <button type="submit" className="h-10 rounded-lg bg-accent px-4 text-sm font-bold text-accent-fg">
+            <button type="submit" className="h-10 rounded-lg bg-accent px-4 text-sm font-bold text-accent-fg transition-colors hover:bg-accent-hover">
               검색
             </button>
           </form>
         </div>
 
-        <div className="overflow-x-auto rounded-2xl border border-line bg-card">
+        <div className="overflow-x-auto rounded-lg border border-line bg-card">
           <table className="w-full min-w-[56rem] text-left text-sm">
             <thead className="border-b border-line text-xs text-muted">
               <tr>
@@ -112,7 +112,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                         href={`/${doc._id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium text-accent underline underline-offset-2"
+                        className="font-medium text-accent-text underline underline-offset-2"
                       >
                         {doc._id}
                       </a>

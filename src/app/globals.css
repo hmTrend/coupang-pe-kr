@@ -1,40 +1,50 @@
 @import "tailwindcss";
 
-/* 색상 토큰: 라이트 기본 + 시스템 다크모드. 중립 슬레이트 + 틸 포인트 (특정 브랜드 색 사용 안 함) */
+/* 색상 토큰: 라이트 기본 + 시스템 다크모드. 쿠팡 웹 UI 계열(블루 primary, 레드 포인트, 중립 회색). 로고/브랜드 이미지는 쓰지 않는다 */
 :root {
-  --background: #f4f6f8;
+  --background: #f5f5f5;
   --card: #ffffff;
-  --foreground: #101828;
-  --muted: #667085;
-  --line: #e4e7ec;
-  --accent: #0f766e;
-  --accent-soft: #e0f4f1;
+  --foreground: #111111;
+  --muted: #767676;
+  --line: #e5e5e5;
+  /* primary: 버튼/배너 hover 등 "채움" 용도. 흰 글씨(accent-fg) 대비 4.5:1 */
+  --accent: #346aff;
+  --accent-hover: #2a5be8;
+  /* 글자/링크/아이콘 용도의 primary (다크모드에서는 대비를 위해 더 밝게) */
+  --accent-text: #346aff;
+  --accent-soft: #eaf0ff;
   --accent-fg: #ffffff;
   --warn-bg: #fff6df;
   --warn-fg: #8a5a00;
   --warn-line: #f5d78a;
-  --danger: #b42318;
+  /* 포인트 레드: 오류/위험 표시에만 쓴다 */
+  --danger: #e52528;
   /* 단계바: 남색 패널 + 초록 활성. 패널 자체가 어두운 색이라 다크모드에서도 그대로 쓴다 */
   --step-panel: #34465e;
   --step-active: #5cb46d;
   --step-inactive: rgba(255, 255, 255, 0.12);
   --step-muted: rgba(255, 255, 255, 0.55);
+  /* 홈 바로가기 배너 워드마크의 어두운 글자색 (다크모드에서는 밝은 톤으로 바꾼다) */
+  --wordmark-ink: #5a2d1f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0c1117;
-    --card: #151c24;
-    --foreground: #e9edf2;
-    --muted: #98a2b3;
-    --line: #26303c;
-    --accent: #2dd4bf;
-    --accent-soft: #11302d;
-    --accent-fg: #06201d;
+    --background: #121212;
+    --card: #1c1c1e;
+    --foreground: #f2f2f2;
+    --muted: #9b9b9f;
+    --line: #333336;
+    --accent: #346aff;
+    --accent-hover: #4a7dff;
+    --accent-text: #6c93ff;
+    --accent-soft: #1b2a52;
+    --accent-fg: #ffffff;
     --warn-bg: #2a2110;
     --warn-fg: #f5c451;
     --warn-line: #5c4713;
-    --danger: #f97066;
+    --danger: #ff6b6e;
+    --wordmark-ink: #c98b6b;
   }
 }
 
@@ -45,6 +55,8 @@
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
   --color-accent-soft: var(--accent-soft);
   --color-accent-fg: var(--accent-fg);
   --color-warn-bg: var(--warn-bg);
@@ -55,6 +67,7 @@
   --color-step-active: var(--step-active);
   --color-step-inactive: var(--step-inactive);
   --color-step-muted: var(--step-muted);
+  --color-wordmark-ink: var(--wordmark-ink);
   --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
     system-ui, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI",
     Roboto, sans-serif;

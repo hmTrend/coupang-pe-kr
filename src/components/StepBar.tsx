@@ -90,7 +90,7 @@ export default function StepBar({ steps }: { steps: TrackingStep[] }) {
     a?.active && b?.active ? "bg-step-active" : "bg-step-inactive";
 
   return (
-    <div className="rounded-xl bg-step-panel px-2 py-4">
+    <div className="rounded-lg bg-step-panel px-2 py-4">
       <ol
         className="grid"
         style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}

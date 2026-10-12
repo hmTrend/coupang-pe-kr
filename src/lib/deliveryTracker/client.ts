@@ -213,7 +213,11 @@ export class DeliveryTrackerClient {
 const globalForClient = globalThis as unknown as { __deliveryTrackerClient?: DeliveryTrackerClient };
 
 export function getDefaultClient(): DeliveryTrackerClient {
-  return (globalForClient.__deliveryTrackerClient ??= new DeliveryTrackerClient());
+  const existing = globalForClient.__deliveryTrackerClient;
+  // 핫리로드로 이 모듈이 다시 평가되면 클래스가 새로 만들어져 옛 인스턴스는 instanceof 를 통과하지 못한다.
+  // 그때는 옛 모듈(변환 로직 포함)을 붙잡고 있는 인스턴스를 버리고 새로 만든다. 운영(HMR 없음)에서는 항상 재사용된다.
+  if (existing instanceof DeliveryTrackerClient) return existing;
+  return (globalForClient.__deliveryTrackerClient = new DeliveryTrackerClient());
 }
 
 /** 운송장 1건 조회 (프로세스 전역 클라이언트 사용) */

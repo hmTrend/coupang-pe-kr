@@ -46,6 +46,15 @@ export function formatKstDateTime(date: Date | undefined | null): string {
   return dateTimeFormat.format(date);
 }
 
+// 호스팅 API 는 coupangls 영문 페이지를 읽는지 수령인 이름 뒤에 " sir" 를 붙여 준다 (실측 2026-10-13: "권*성 sir").
+// 화면에서 " 님" 을 따로 붙이므로 호칭은 떼어 낸다. (변환 시점 map.ts 와 렌더 시점 TrackingView 가 함께 쓴다)
+const RECIPIENT_HONORIFIC = /\s*(?:님|sir|ma'?am|mr\.?|ms\.?)$/i;
+
+/** 수령인 이름 끝의 호칭(" sir", " 님" 등)을 뗀다. 이미 저장된 예전 스냅샷에도 적용할 수 있게 멱등이다 */
+export function stripHonorific(name: string): string {
+  return name.replace(RECIPIENT_HONORIFIC, "").trim();
+}
+
 /** 화면 상단에 크게 보여줄 현재 상태 문구 (최신 이벤트 상태 > 현재 단계 > 기본값) */
 export function statusLabel(data: TrackingData): string {
   return data.latest?.status || data.currentStep || "배송 이력 없음";
