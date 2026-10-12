@@ -49,7 +49,7 @@ Tracking API 는 매 요청에 Client Secret 을 요구한다(`Authorization: TR
 | `NEXT_PUBLIC_SITE_NAME` | `배송조회` | 사이트 이름. 빌드 시점에 인라인되므로 바꾸면 재빌드 필요 |
 | `NEXT_PUBLIC_SITE_URL` | (없음) | 공개 URL. 미리보기용 `metadataBase` |
 | `NEXT_PUBLIC_COUPANG_PARTNERS_URL` | `https://link.coupang.com/a/bQkvJ5` | 쿠팡 홈 바로가기 배너(상단/하단)의 쿠팡 파트너스 링크. http(s) 주소만 허용, 재빌드 필요 |
-| `NEXT_PUBLIC_CONTACT_PHONE` | `010-3277-0737` | 택배사 표 "전화번호" 줄의 문의 연락처 + 문자보내기/전화하기 버튼. 문자 본문 맨 위에 `[배송문의] / 송장번호 / 고객명(마스킹)` 이 채워진다 |
+| `NEXT_PUBLIC_CONTACT_PHONE` | `010-3277-0737` | 택배사 표 "전화번호" 줄의 문의 연락처. 번호를 누르면 `tel:` 로 번호만 연결되고, 오른쪽 끝 "문자보내기" 를 누르면 문자 본문 맨 위에 `[배송문의] / 송장번호 / 고객명(마스킹)` 이 채워진다 |
 | `DELIVERY_TRACKER_CLIENT_ID` | (없음) | Delivery Tracker Client Id. Tracking Link 보조 버튼에도 쓴다 |
 | `DELIVERY_TRACKER_CLIENT_SECRET` | (없음) | Client Secret (**비밀값**, 서버 전용). 없으면 조회 불가(`not_configured`) |
 | `DELIVERY_TRACKER_CARRIER_ID` | `kr.coupangls` | 택배사 ID |
@@ -120,7 +120,7 @@ Tracking API 는 매 요청에 Client Secret 을 요구한다(`Authorization: TR
   화면의 수령인 블록은 `이름 님`(굵게, API 이름이 없으면 `meta.receiverName`) 바로 밑에 쿠팡 주문 상세처럼 `상품명` / `받는주소` / `배송요청사항` 행(왼쪽 회색 라벨, 값이 있는 줄만)을 보여주고,
   `meta.receiverAddress` 가 없을 때만 API 지역 줄을 쓴다. meta 가 없는 번호(NSV 에도 없고 push 도 없음)는 예전과 같은 화면이다.
 - 택배사: `kr.coupangls` 면 `Coupang Logistics Services` / `1544-9898` 고정, 다른 carrierId 면 이름만 carrierId.
-  화면의 "전화번호" 줄은 이 대표번호 대신 문의 연락처(`NEXT_PUBLIC_CONTACT_PHONE`)와 문자보내기/전화하기 버튼을 보여준다.
+  화면의 "전화번호" 줄은 이 대표번호 대신 문의 연락처(`NEXT_PUBLIC_CONTACT_PHONE`, 번호 자체가 전화 링크)와 오른쪽 끝 문자보내기 링크를 보여준다(둘 다 버튼 강조 없이 링크색+밑줄).
 - 이벤트가 하나도 없지만 오류도 아니면 `ok`(빈 이력)이며 화면에는 "배송 이력 없음 / 아직 배송 이력이 없습니다"로 나온다. `not_found` 와는 다르다.
 
 ### 조회 불가 시 보조 링크

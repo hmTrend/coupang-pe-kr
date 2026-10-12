@@ -6,8 +6,10 @@ function dialable(phone: string): string {
   return (trimmed.startsWith("+") ? "+" : "") + trimmed.replace(/[^0-9]/g, "");
 }
 
+/** 전화 앱 키패드에 번호가 채워지도록 번호만 연결한다 (화면에 보이는 하이픈 형식 그대로, 예: tel:010-3277-0737) */
 export function telHref(phone: string): string {
-  return `tel:${dialable(phone)}`;
+  const trimmed = phone.trim();
+  return `tel:${(trimmed.startsWith("+") ? "+" : "") + trimmed.replace(/[^0-9-]/g, "")}`;
 }
 
 /**

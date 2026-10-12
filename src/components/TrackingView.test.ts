@@ -70,15 +70,25 @@ describe("TrackingView", () => {
       expect(html).not.toContain("복사");
     });
 
-    it("전화번호는 문의 연락처(기본 010-3277-0737)이고 옆에 문자보내기·전화하기 버튼이 있다", () => {
+    it("전화번호는 문의 연락처(기본 010-3277-0737)이고 번호 자체가 tel 링크, 오른쪽 끝에 문자보내기", () => {
       const row = rowsOf(tableAt(html, 1)).find((r) => r.includes(">전화번호<")) ?? "";
-      expect(textOf(row)).toBe("전화번호 010-3277-0737 문자보내기 전화하기");
-      // 택배사 대표번호는 더 이상 보이지 않는다
+      expect(textOf(row)).toBe("전화번호 010-3277-0737 문자보내기");
+      // 택배사 대표번호와 별도 전화하기 버튼은 없다
       expect(html).not.toContain("1544-9898");
-      expect(row).toContain('href="tel:01032770737"');
-      expect(row).not.toContain("underline");
-      // 번호 텍스트 자체는 링크가 아니다 (버튼만 링크)
-      expect(row).not.toMatch(/<a[^>]*>\s*010-3277-0737/);
+      expect(html).not.toContain("전화하기");
+      // 번호를 누르면 번호만 키패드에 채워진다
+      expect(row).toMatch(/<a href="tel:010-3277-0737"[^>]*>010-3277-0737<\/a>/);
+      // 문자보내기는 번호 뒤(오른쪽 끝)
+      expect(row.indexOf("문자보내기")).toBeGreaterThan(row.indexOf("010-3277-0737"));
+      expect(row).toMatch(/justify-between/);
+      // 둘 다 링크처럼 보이되(링크색 + 밑줄) 버튼처럼 강조하지는 않는다 (배경·테두리·굵게 없음)
+      const links = row.match(/<a[^>]*>/g) ?? [];
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link).toMatch(/\btext-accent-text\b/);
+        expect(link).toMatch(/\bunderline\b/);
+        expect(link).not.toMatch(/bg-accent|\bborder\b|font-bold|rounded/);
+      }
     });
 
     it("문자보내기는 송장번호와 고객명이 상단에 채워진 문자를 연다", () => {
@@ -93,7 +103,7 @@ describe("TrackingView", () => {
       try {
         const markup = render({ ...base, data });
         expect(markup).toContain("02-123-4567");
-        expect(markup).toContain('href="tel:021234567"');
+        expect(markup).toContain('href="tel:02-123-4567"');
         expect(markup).toContain('href="sms:021234567?&amp;body=');
       } finally {
         vi.unstubAllEnvs();
@@ -189,7 +199,7 @@ describe("TrackingView", () => {
         expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "전화번호", "송장번호"]);
         expect(rows.map((r) => cellsOf(r)[0])).toEqual([
           "Coupang Logistics Services",
-          "010-3277-0737 문자보내기 전화하기",
+          "010-3277-0737 문자보내기",
           NO,
         ]);
         expect(eventRows(markup)).toHaveLength(data.events.length);
@@ -338,7 +348,7 @@ describe("TrackingView", () => {
       expect(rows.map((r) => textOf(/<th[\s\S]*?<\/th>/.exec(r)![0]))).toEqual(["택배사", "전화번호", "송장번호"]);
       expect(rows.map((r) => cellsOf(r)[0])).toEqual([
         "Coupang Logistics Services",
-        "010-3277-0737 문자보내기 전화하기",
+        "010-3277-0737 문자보내기",
         NO,
       ]);
     });

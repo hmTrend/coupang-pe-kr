@@ -5,9 +5,9 @@ import { inquirySmsBody, smsHref, telHref } from "./contact";
 afterEach(() => vi.unstubAllEnvs());
 
 describe("문의 연락처 링크", () => {
-  it("tel: 링크는 숫자만 남긴다 (국제번호 + 유지)", () => {
-    expect(telHref("010-3277-0737")).toBe("tel:01032770737");
-    expect(telHref(" +82 10-3277-0737 ")).toBe("tel:+821032770737");
+  it("tel: 링크는 보이는 하이픈 형식 그대로 번호만 연결한다 (국제번호 + 유지)", () => {
+    expect(telHref("010-3277-0737")).toBe("tel:010-3277-0737");
+    expect(telHref(" +82 10-3277-0737 ")).toBe("tel:+8210-3277-0737");
   });
 
   it("sms: 링크는 iOS/안드로이드 공용 ?&body= 형태이고 본문은 인코딩된다", () => {

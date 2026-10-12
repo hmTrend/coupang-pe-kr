@@ -53,24 +53,20 @@ function CourierRow({ label, children }: { label: string; children: React.ReactN
   );
 }
 
-/** 문의 연락처: 번호 + 문자보내기(송장번호·고객명이 채워진 문자) + 전화하기 */
+/**
+ * 문의 연락처: 번호 자체가 전화 링크, 오른쪽 끝에 문자보내기(송장번호·고객명이 채워진 문자).
+ * 버튼처럼 강조하지 않고 링크로만 보이게 한다 (링크색 + 밑줄)
+ */
 function ContactCell({ phone, invoiceNo, customerName }: { phone: string; invoiceNo: string; customerName: string }) {
-  const button = "inline-flex h-8 items-center rounded-md px-3 text-xs font-bold transition-colors";
+  const link = "text-accent-text underline underline-offset-2";
   return (
-    // 360px 에서 버튼이 번호 옆에 다 안 들어가면 아래 줄로 내려간다
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span>{phone}</span>
-      <span className="flex gap-1.5">
-        <a
-          href={smsHref(phone, inquirySmsBody({ invoiceNo, customerName }))}
-          className={`${button} border border-accent text-accent-text hover:bg-accent-soft`}
-        >
-          문자보내기
-        </a>
-        <a href={telHref(phone)} className={`${button} bg-accent text-accent-fg hover:bg-accent-hover`}>
-          전화하기
-        </a>
-      </span>
+    <div className="flex items-center justify-between gap-3">
+      <a href={telHref(phone)} className={link}>
+        {phone}
+      </a>
+      <a href={smsHref(phone, inquirySmsBody({ invoiceNo, customerName }))} className={`${link} shrink-0`}>
+        문자보내기
+      </a>
     </div>
   );
 }
