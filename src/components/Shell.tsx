@@ -1,5 +1,5 @@
 import Link from "next/link";
-import CoupangHomeBanner, { PartnersNotice } from "./CoupangHomeBanner";
+import CoupangHomeBanner from "./CoupangHomeBanner";
 
 /** 공통 페이지 틀: 상단 사이트명 + 본문. wide 는 관리자 표용, banner=false 는 쿠팡 홈 배너를 빼는 용도(관리자) */
 export default function Shell({
@@ -31,7 +31,6 @@ export default function Shell({
         {banner && (
           <div className="mt-4">
             <CoupangHomeBanner />
-            <PartnersNotice />
           </div>
         )}
       </main>

@@ -65,12 +65,11 @@ describe("쿠팡 홈 바로가기 배너", () => {
     }
   });
 
-  it.each(pages)("%s 화면에 고지 문구가 한 번만, 하단 배너 바로 아래에 나온다", (_name, render) => {
+  // 사용자 지시(2026-10-13)로 파트너스 고지 문구는 넣지 않는다
+  it.each(pages)("%s 화면에 파트너스 고지 문구가 없다", (_name, render) => {
     const html = render();
-    expect(html.split(NOTICE)).toHaveLength(2);
-    expect(html).toMatch(/<\/a><p[^>]*text-xs[^>]*text-muted[^>]*>이 링크는 쿠팡 파트너스/);
-    // 고지 문구는 하단(두 번째) 배너 뒤에 있다
-    expect(html.indexOf(NOTICE)).toBeGreaterThan(html.lastIndexOf("쿠팡 홈 바로가기"));
+    expect(html).not.toContain(NOTICE);
+    expect(html).not.toContain("파트너스 활동");
   });
 
   it("상단 배너는 본문 앞, 하단 배너는 본문 뒤에 놓인다", () => {
@@ -139,11 +138,10 @@ describe("쿠팡 홈 바로가기 배너", () => {
     }
   });
 
-  it("banner={false} 면 배너와 고지 문구가 모두 빠진다", () => {
+  it("banner={false} 면 배너가 모두 빠진다", () => {
     const html = shell(createElement("p", null, "본문"), { wide: true, banner: false });
     expect(bannerLinks(html)).toHaveLength(0);
     expect(html).not.toContain("쿠팡 홈 바로가기");
-    expect(html).not.toContain(NOTICE);
     expect(html).toContain("본문");
   });
 
@@ -152,7 +150,7 @@ describe("쿠팡 홈 바로가기 배너", () => {
     expect(source).toMatch(/<Shell wide banner=\{false\}>/);
   });
 
-  it("고지 문구가 추가돼도 출처/공식 사이트 안내 문구는 없다", () => {
+  it("출처/공식 사이트 안내 문구는 없다", () => {
     for (const [, render] of pages) expect(render()).not.toMatch(/출처|공식 사이트|공식사이트/);
   });
 });

@@ -46,12 +46,3 @@ export default function CoupangHomeBanner() {
     </a>
   );
 }
-
-/** 쿠팡 파트너스 고지 문구. 하단 배너 바로 아래에 항상 함께 둔다 (정책상 필수라 끄는 옵션을 두지 않는다) */
-export function PartnersNotice() {
-  return (
-    <p className="mt-2 px-1 text-xs leading-relaxed text-muted">
-      이 링크는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
-    </p>
-  );
-}
