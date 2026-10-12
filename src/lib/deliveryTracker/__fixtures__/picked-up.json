@@ -1,0 +1,35 @@
+{
+  "data": {
+    "track": {
+      "trackingNumber": "10332152871106",
+      "lastEvent": {
+        "time": "2026-10-08T08:34:22+09:00",
+        "status": {
+          "code": "IN_TRANSIT",
+          "name": "집하"
+        },
+        "description": "집하 - 인천28HUB",
+        "location": null
+      },
+      "events": {
+        "edges": [
+          {
+            "node": {
+              "time": "2026-10-08T08:34:22+09:00",
+              "status": {
+                "code": "IN_TRANSIT",
+                "name": "집하"
+              },
+              "description": "집하 - 인천28HUB",
+              "location": null
+            }
+          }
+        ]
+      },
+      "recipient": {
+        "name": "이*화",
+        "location": null
+      }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "data": {
+    "track": {
+      "trackingNumber": "10332152871106",
+      "lastEvent": {
+        "time": "2026-10-08T18:55:06+09:00",
+        "status": {
+          "code": "DELIVERED",
+          "name": "배송완료"
+        },
+        "description": "배송완료 - 일산5",
+        "location": null
+      },
+      "events": {
+        "edges": [
+          {
+            "node": {
+              "time": "2026-10-08T08:34:22+09:00",
+              "status": {
+                "code": "IN_TRANSIT",
+                "name": "집하"
+              },
+              "description": "집하 - 인천28HUB",
+              "location": null
+            }
+          },
+          {
+            "node": {
+              "time": "2026-10-08T09:44:07+09:00",
+              "status": {
+                "code": "IN_TRANSIT",
+                "name": "캠프상차"
+              },
+              "description": "캠프상차 - 인천28HUB",
+              "location": null
+            }
+          },
+          {
+            "node": {
+              "time": "2026-10-08T13:19:40+09:00",
+              "status": {
+                "code": "IN_TRANSIT",
+                "name": "캠프도착"
+              },
+              "description": "캠프도착 - 일산5",
+              "location": null
+            }
+          },
+          {
+            "node": {
+              "time": "2026-10-08T15:17:45+09:00",
+              "status": {
+                "code": "OUT_FOR_DELIVERY",
+                "name": "배송출발"
+              },
+              "description": "배송출발 - 일산5",
+              "location": null
+            }
+          },
+          {
+            "node": {
+              "time": "2026-10-08T18:55:06+09:00",
+              "status": {
+                "code": "DELIVERED",
+                "name": "배송완료"
+              },
+              "description": "배송완료 - 일산5",
+              "location": null
+            }
+          }
+        ]
+      },
+      "recipient": {
+        "name": "이*화",
+        "location": null
+      }
+    }
+  }
+}

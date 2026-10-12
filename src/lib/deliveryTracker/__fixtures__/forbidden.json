@@ -1,0 +1,10 @@
+{
+  "errors": [
+    {
+      "message": "Authorization header is missing.",
+      "extensions": {
+        "code": "FORBIDDEN"
+      }
+    }
+  ]
+}
