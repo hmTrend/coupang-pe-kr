@@ -1,4 +1,6 @@
 import { Fragment } from "react";
+import { contactPhone } from "@/lib/config";
+import { inquirySmsBody, smsHref, telHref } from "@/lib/contact";
 import type { TrackingData } from "@/lib/deliveryTracker/types";
 import { formatKstClock, formatKstDateTime, shortDateTime, statusLabel, stripHonorific } from "@/lib/format";
 import type { TrackingResult } from "@/lib/tracking";
@@ -48,6 +50,28 @@ function CourierRow({ label, children }: { label: string; children: React.ReactN
       </th>
       <td className="py-2.5 align-top tabular-nums">{children}</td>
     </tr>
+  );
+}
+
+/** 문의 연락처: 번호 + 문자보내기(송장번호·고객명이 채워진 문자) + 전화하기 */
+function ContactCell({ phone, invoiceNo, customerName }: { phone: string; invoiceNo: string; customerName: string }) {
+  const button = "inline-flex h-8 items-center rounded-md px-3 text-xs font-bold transition-colors";
+  return (
+    // 360px 에서 버튼이 번호 옆에 다 안 들어가면 아래 줄로 내려간다
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <span>{phone}</span>
+      <span className="flex gap-1.5">
+        <a
+          href={smsHref(phone, inquirySmsBody({ invoiceNo, customerName }))}
+          className={`${button} border border-accent text-accent-text hover:bg-accent-soft`}
+        >
+          문자보내기
+        </a>
+        <a href={telHref(phone)} className={`${button} bg-accent text-accent-fg hover:bg-accent-hover`}>
+          전화하기
+        </a>
+      </span>
+    </div>
   );
 }
 
@@ -124,7 +148,10 @@ function OkView({ result, data }: { result: TrackingResult; data: TrackingData }
         <table className="w-full text-sm">
           <tbody className="divide-y divide-line">
             {courier?.name && <CourierRow label="택배사">{courier.name}</CourierRow>}
-            {courier?.phone && <CourierRow label="전화번호">{courier.phone}</CourierRow>}
+            {/* 택배사 대표번호 대신 문의 연락처를 보여준다 */}
+            <CourierRow label="전화번호">
+              <ContactCell phone={contactPhone()} invoiceNo={invoiceNo} customerName={recipientName} />
+            </CourierRow>
             <CourierRow label="송장번호">{invoiceNo}</CourierRow>
           </tbody>
         </table>

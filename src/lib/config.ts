@@ -35,6 +35,15 @@ export function coupangPartnersUrl(): string {
   return v && /^https?:\/\//i.test(v) ? v : DEFAULT_COUPANG_PARTNERS_URL;
 }
 
+/** 고객 문의 연락처 기본값 (조회 화면의 전화번호 + 문자보내기/전화하기 버튼) */
+export const DEFAULT_CONTACT_PHONE = "010-3277-0737";
+
+/** 고객 문의 연락처. NEXT_PUBLIC_CONTACT_PHONE 이 없거나 전화번호 모양이 아니면 기본값을 쓴다 */
+export function contactPhone(): string {
+  const v = process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim();
+  return v && /^\+?[0-9][0-9-]{6,18}$/.test(v) ? v : DEFAULT_CONTACT_PHONE;
+}
+
 export interface TrackingConfig {
   /** ok 스냅샷 신선 기간 */
   cacheTtlMs: number;
